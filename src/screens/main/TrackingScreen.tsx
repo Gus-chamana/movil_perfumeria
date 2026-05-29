@@ -11,6 +11,7 @@ import {
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useData } from '../../context/DataContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
@@ -27,37 +28,15 @@ interface TimelineEvent {
 export default function TrackingScreen() {
   const route = useRoute<TrackingScreenRouteProp>();
   const navigation = useNavigation<TrackingScreenNavigationProp>();
+  const { orders } = useData();
   
   // Capturar el ID del pedido generado o por defecto
-  const orderId = route.params?.orderId || 'NE-948271';
+  const orderId = route.params?.orderId || 'NE-49201';
 
-  // Eventos de la línea de tiempo vertical de lujo
-  const TIMELINE_EVENTS: TimelineEvent[] = [
-    {
-      title: 'Pedido Confirmado',
-      time: '10:14 AM',
-      description: 'Tu transacción ha sido validada de forma exitosa. Transmitido a bodega central.',
-      status: 'completed',
-    },
-    {
-      title: 'Preparación y Embalaje de Lujo',
-      time: '10:30 AM',
-      description: 'Tu fragancia ha sido sellada y empaquetada con envoltura protectora Noir Essence.',
-      status: 'completed',
-    },
-    {
-      title: 'En Camino a tu Destino',
-      time: '10:45 AM (En Tránsito)',
-      description: 'El motorizado exclusivo ha salido del centro de distribución y va en ruta.',
-      status: 'active',
-    },
-    {
-      title: 'Entrega en Puerta',
-      time: 'Estimado 11:15 AM',
-      description: 'Fragancia entregada en mano propia bajo estrictos protocolos de bioseguridad.',
-      status: 'pending',
-    },
-  ];
+  // Encontrar la orden correspondiente en la base de datos real compartida
+  const order = orders.find(o => o.id === orderId) || orders[0];
+
+  const TIMELINE_EVENTS = order.timeline;
 
   const handleReturnHome = () => {
     // Regresa a la pestaña principal del Core (HomeScreen)
@@ -80,14 +59,18 @@ export default function TrackingScreen() {
         <View style={styles.dispatcherCard}>
           <View style={styles.dispatcherInfoRow}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarCircleText}>MS</Text>
+              <Text style={styles.avatarCircleText}>
+                {order.motorizado ? order.motorizado.split(' ').map(n => n[0]).join('').toUpperCase() : 'NE'}
+              </Text>
             </View>
             <View style={styles.dispatcherMeta}>
-              <Text style={styles.driverName}>Mateo Silva</Text>
-              <Text style={styles.vehicleType}>Repartidor Noir Conciérge</Text>
+              <Text style={styles.driverName}>{order.motorizado || 'Por asignar despachador'}</Text>
+              <Text style={styles.vehicleType}>
+                {order.motorizado ? 'Repartidor Noir Conciérge' : 'Esperando preparación...'}
+              </Text>
             </View>
             <View style={styles.plateBadge}>
-              <Text style={styles.plateText}>NG-5830</Text>
+              <Text style={styles.plateText}>{order.motorizado ? 'NG-5830' : '---'}</Text>
             </View>
           </View>
           
@@ -95,7 +78,7 @@ export default function TrackingScreen() {
           
           <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
           <Text style={styles.deliveryAddress}>
-            Av. Javier Prado Este 1024, Dpto 402, San Borja, Lima
+            {order.address}
           </Text>
         </View>
 

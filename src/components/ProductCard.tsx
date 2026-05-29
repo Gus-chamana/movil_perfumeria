@@ -21,6 +21,7 @@ export interface ProductCardProps {
   isFavoriteInitial?: boolean;
   onPress?: () => void;
   onFavoritePress?: (isFavorite: boolean) => void;
+  onAddToCartPress?: () => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -42,6 +43,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isFavoriteInitial = false,
   onPress,
   onFavoritePress,
+  onAddToCartPress,
 }) => {
   const [isFavorite, setIsFavorite] = useState(isFavoriteInitial);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -132,10 +134,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {name}
         </Text>
 
-        {/* Precio en Oro Premium */}
-        <Text style={styles.priceText}>
-          {formatPrice(price)}
-        </Text>
+        {/* Fila de precio y botón de añadir */}
+        <View style={styles.priceRow}>
+          <Text style={styles.priceText}>
+            {formatPrice(price)}
+          </Text>
+          
+          <TouchableOpacity 
+            activeOpacity={0.7} 
+            onPress={(e) => {
+              e.stopPropagation(); // Evita que se dispare el onPress de la tarjeta completa
+              if (onAddToCartPress) onAddToCartPress();
+            }}
+            style={styles.addToCartBtn}
+          >
+            <Text style={styles.addToCartBtnText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -241,6 +256,27 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.bodyMedium,
     color: theme.colors.textPrimary, // Blanco para precio o dorado
     fontWeight: theme.typography.weights.bold,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: theme.spacing.xs,
+  },
+  addToCartBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addToCartBtnText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 16,
+    color: theme.colors.background,
+    fontWeight: 'bold',
+    lineHeight: 18,
+    marginTop: -1,
   },
 });

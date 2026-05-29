@@ -8,12 +8,15 @@ import {
   TouchableOpacity, 
   Animated,
   Dimensions,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { ProductCard } from '../../components/ProductCard';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
+import { Product } from '../../assets/productsData';
+import { useCart } from '../../context/CartContext';
+import { useData } from '../../context/DataContext';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +33,9 @@ const SIZE_OPTIONS = ['Todos', '50ml', '100ml', '200ml'];
 const CONCENTRATION_OPTIONS = ['Todos', 'Eau de Parfum', 'Parfum', 'Eau de Toilette'];
 
 export default function CatalogScreen() {
+  const { addToCart } = useCart();
+  const { products } = useData();
+  
   // Estados de Filtros
   const [selectedGender, setSelectedGender] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('Todos');
@@ -39,7 +45,7 @@ export default function CatalogScreen() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Filtrado reactivo en tiempo real
-  const filteredProducts = PRODUCTS_MOCK.filter((product) => {
+  const filteredProducts = products.filter((product) => {
     const matchGender = selectedGender === 'all' || product.gender === selectedGender;
     const matchSize = selectedSize === 'Todos' || product.size === selectedSize;
     const matchConcentration = selectedConcentration === 'Todos' || product.concentration === selectedConcentration;
@@ -50,6 +56,11 @@ export default function CatalogScreen() {
     setSelectedGender('all');
     setSelectedSize('Todos');
     setSelectedConcentration('Todos');
+  };
+
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
+    Alert.alert('Noir Essence', `"${product.name}" se añadió a tu bolsa de compras.`);
   };
 
   const getActiveFiltersCount = () => {
@@ -193,6 +204,7 @@ export default function CatalogScreen() {
               imageUrl={item.imageUrl}
               isNew={item.isNew}
               onPress={() => console.log(`Detalle: ${item.name}`)}
+              onAddToCartPress={() => handleAddToCart(item)}
             />
           )}
         />

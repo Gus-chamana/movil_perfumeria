@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -15,6 +15,7 @@ import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
 import { useNavigation } from '@react-navigation/native';
+import { useCart } from '../../context/CartContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
@@ -27,35 +28,7 @@ interface CartItem {
 
 export default function CartScreen() {
   const navigation = useNavigation<CartScreenNavigationProp>();
-  
-  // Inicializamos el carrito con 2 perfumes de lujo para demostrar el cálculo interactivo
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    { product: PRODUCTS_MOCK[0], quantity: 1 }, // Oud Mystique
-    { product: PRODUCTS_MOCK[1], quantity: 2 }, // Nuit Intense
-  ]);
-
-  // Manejo de cantidades
-  const handleIncreaseQty = (id: string) => {
-    setCartItems(prev => prev.map(item => 
-      item.product.id === id 
-        ? { ...item, quantity: item.quantity + 1 } 
-        : item
-    ));
-  };
-
-  const handleDecreaseQty = (id: string) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.product.id === id) {
-        const nextQty = item.quantity - 1;
-        return nextQty > 0 ? { ...item, quantity: nextQty } : item;
-      }
-      return item;
-    }));
-  };
-
-  const handleRemoveItem = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.product.id !== id));
-  };
+  const { cartItems, increaseQty, decreaseQty, removeItem } = useCart();
 
   // Cálculos dinámicos
   const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -112,7 +85,7 @@ export default function CartScreen() {
                 <View style={styles.qtyContainer}>
                   <TouchableOpacity 
                     activeOpacity={0.7} 
-                    onPress={() => handleRemoveItem(item.product.id)}
+                    onPress={() => removeItem(item.product.id)}
                     style={styles.deleteButton}
                   >
                     <Text style={styles.deleteText}>×</Text>
@@ -121,7 +94,7 @@ export default function CartScreen() {
                   <View style={styles.counterRow}>
                     <TouchableOpacity 
                       activeOpacity={0.7} 
-                      onPress={() => handleDecreaseQty(item.product.id)}
+                      onPress={() => decreaseQty(item.product.id)}
                       style={styles.counterBtn}
                     >
                       <Text style={styles.counterBtnText}>-</Text>
@@ -131,7 +104,7 @@ export default function CartScreen() {
                     
                     <TouchableOpacity 
                       activeOpacity={0.7} 
-                      onPress={() => handleIncreaseQty(item.product.id)}
+                      onPress={() => increaseQty(item.product.id)}
                       style={styles.counterBtn}
                     >
                       <Text style={styles.counterBtnText}>+</Text>

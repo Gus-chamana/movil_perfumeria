@@ -7,12 +7,14 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ScrollView, 
-  TouchableOpacity 
+  TouchableOpacity,
+  Alert
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { CustomInput } from '../../components/CustomInput';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
@@ -20,6 +22,7 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, '
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login } = useAuth();
   
   // Estados de Formulario
   const [email, setEmail] = useState('');
@@ -31,7 +34,7 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
 
   // Validación básica y simulación de Login
-  const handleLogin = () => {
+  const handleLogin = async () => {
     let valid = true;
     setEmailError('');
     setPasswordError('');
@@ -56,20 +59,25 @@ export default function LoginScreen() {
 
     if (!valid) return;
 
-    // Simular llamada a API
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await login(email, password);
       setLoading(false);
-      // Redirigir al flujo principal de la App
-      navigation.replace('Main');
-    }, 1500);
+      if (!response.success) {
+        Alert.alert('Error de Acceso', response.error || 'Credenciales inválidas.');
+      }
+    } catch (err) {
+      setLoading(false);
+      Alert.alert('Error de Conexión', 'Ocurrió un error inesperado al iniciar sesión.');
+    }
   };
 
   const handleGoToRegister = () => {
-    // Para simplificar la navegación en el AuthStack
-    // Dado que Login y Register son parte del Auth Navigator
-    // Podemos navegar al Register del AuthStack
     navigation.navigate('Auth', { screen: 'Register' } as any);
+  };
+
+  const handleGoToForgotPassword = () => {
+    navigation.navigate('Auth', { screen: 'ForgotPassword' } as any);
   };
 
   return (
@@ -115,6 +123,7 @@ export default function LoginScreen() {
             {/* Olvidé mi Contraseña */}
             <TouchableOpacity 
               activeOpacity={0.7} 
+              onPress={handleGoToForgotPassword}
               style={styles.forgotPasswordContainer}
             >
               <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>

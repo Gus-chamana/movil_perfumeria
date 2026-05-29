@@ -14,6 +14,8 @@ import { theme } from '../../theme/theme';
 import { CustomInput } from '../../components/CustomInput';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
+import { useCart } from '../../context/CartContext';
+import { useData } from '../../context/DataContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
@@ -23,6 +25,14 @@ type PaymentMethodType = 'yape' | 'plin' | 'card' | null;
 
 export default function CheckoutScreen() {
   const navigation = useNavigation<CheckoutScreenNavigationProp>();
+  const { cartItems, clearCart } = useCart();
+  const { createOrder } = useData();
+
+  // Calcular total real
+  const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const igv = subtotal * 0.18;
+  const shipping = subtotal > 0 ? 15.00 : 0.00;
+  const total = subtotal + igv + shipping;
   
   // Paso activo en el Checkout (1: Dirección, 2: Pago)
   const [checkoutStep, setCheckoutStep] = useState<1 | 2>(1);
@@ -109,10 +119,21 @@ export default function CheckoutScreen() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      // Generar ID de pedido ficticio aleatorio
-      const mockOrderId = `NE-${Math.floor(100000 + Math.random() * 900000)}`;
-      // Redirigir directamente al Tracking con el ID del pedido
-      navigation.replace('Tracking', { orderId: mockOrderId });
+      
+      // Registrar la orden en el DataContext real
+      const orderId = createOrder(
+        'Gabriela Alva', // Se puede asociar al usuario logueado en un flujo real
+        `${address}, ${city}`,
+        phone,
+        cartItems,
+        total
+      );
+
+      // Vaciar carrito
+      clearCart();
+      
+      // Redirigir directamente al Tracking con el ID del pedido generado
+      navigation.replace('Tracking', { orderId });
     }, 2200);
   };
 

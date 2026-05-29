@@ -3,6 +3,9 @@ import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RootNavigator from './src/navigation/navigation';
+import { CartProvider } from './src/context/CartContext';
+import { AuthProvider } from './src/context/AuthContext';
+import { DataProvider } from './src/context/DataContext';
 
 /**
  * App - Punto de Entrada Principal para la Aplicación Móvil Noir Essence.
@@ -12,10 +15,16 @@ import RootNavigator from './src/navigation/navigation';
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar barStyle="light-content" />
-        <RootNavigator />
-      </NavigationContainer>
+      <DataProvider>
+        <AuthProvider>
+          <CartProvider>
+            <NavigationContainer>
+              <StatusBar barStyle="light-content" />
+              <RootNavigator />
+            </NavigationContainer>
+          </CartProvider>
+        </AuthProvider>
+      </DataProvider>
     </SafeAreaProvider>
   );
 }
