@@ -4,7 +4,7 @@
     "slug": "noir-essence",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/.gitkeep",
+    "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "resizeMode": "contain",
@@ -18,6 +18,12 @@
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D"
       }
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "241e9267-21f2-473b-abd1-e43fe7087826"
+      }
+    },
+    "owner": "gustavo97"
   }
 }
