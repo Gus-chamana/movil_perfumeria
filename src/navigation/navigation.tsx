@@ -7,12 +7,20 @@ import { theme } from '../theme/theme';
 // Importación de Pantallas (Shells iniciales de TAREA 1/2)
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import HomeScreen from '../screens/main/HomeScreen';
 import CatalogScreen from '../screens/main/CatalogScreen';
 import CartScreen from '../screens/main/CartScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import CheckoutScreen from '../screens/main/CheckoutScreen';
 import TrackingScreen from '../screens/main/TrackingScreen';
+
+// Nuevas pantallas para Admin y Motorizado
+import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
+import AdminOrdersScreen from '../screens/admin/AdminOrdersScreen';
+import AdminAddProductScreen from '../screens/admin/AdminAddProductScreen';
+import MotorizadoDashboardScreen from '../screens/motorizado/MotorizadoDashboardScreen';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Definición Estricta de Tipos para TypeScript (React Navigation)
@@ -22,6 +30,7 @@ import TrackingScreen from '../screens/main/TrackingScreen';
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
 };
 
 // Parámetros de Navegación para la Barra Inferior (Bottom Tabs)
@@ -32,10 +41,19 @@ export type MainTabParamList = {
   ProfileTab: undefined;
 };
 
+// Parámetros de Navegación para la Barra Inferior de Administrador
+export type AdminTabParamList = {
+  AdminDashboard: undefined;
+  AdminOrders: undefined;
+  AdminAddProduct: undefined;
+};
+
 // Parámetros de Navegación para el Stack Raíz de la Aplicación
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
+  AdminMain: undefined;
+  MotorizadoMain: undefined;
   Checkout: undefined;
   Tracking: { orderId?: string };
 };
@@ -44,6 +62,7 @@ export type RootStackParamList = {
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const AdminTab = createBottomTabNavigator<AdminTabParamList>();
 
 /**
  * Componente temporal de soporte para Iconos Vectoriales.
@@ -52,20 +71,13 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
  */
 interface TabBarIconProps {
   focused: boolean;
-  color: string;
-  name: string;
+  color?: string;
+  name?: string;
 }
 
-const MinimalTabIcon: React.FC<TabBarIconProps> = ({ focused, color, name }) => {
-  // Letra inicial estilizada como icono minimalista y lujoso
-  const initial = name.substring(0, 1).toUpperCase();
+const MinimalTabIcon: React.FC<TabBarIconProps> = ({ focused }) => {
   return (
-    <View style={styles.iconContainer}>
-      <Text style={[styles.iconText, { color, fontWeight: focused ? 'bold' : 'normal' }]}>
-        {initial}
-      </Text>
-      {focused && <View style={styles.iconIndicator} />}
-    </View>
+    <View style={[styles.tabBarLine, focused ? styles.tabBarLineActive : styles.tabBarLineInactive]} />
   );
 };
 
@@ -83,6 +95,7 @@ export function AuthNavigator() {
     >
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -152,11 +165,68 @@ export function MainTabNavigator() {
 }
 
 /**
- * 3. RootNavigator: Enrutador Raíz y Gestor de Flujos
- * Controla la transición limpia entre el estado desautenticado (Auth) y el núcleo (Main),
- * y superpone pantallas clave como Checkout y Tracking de Pedidos.
+ * 3. AdminTabNavigator: Barra Inferior de Administración
+ */
+export function AdminTabNavigator() {
+  return (
+    <AdminTab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
+          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+          paddingTop: 10,
+          elevation: 8,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 6,
+        },
+        tabBarLabelStyle: {
+          fontFamily: theme.typography.fontFamily.body,
+          fontSize: theme.typography.sizes.caption,
+          fontWeight: theme.typography.weights.medium,
+        },
+        tabBarIcon: ({ focused, color }) => {
+          let name = 'M';
+          if (route.name === 'AdminDashboard') name = 'Métricas';
+          else if (route.name === 'AdminOrders') name = 'Órdenes';
+          else if (route.name === 'AdminAddProduct') name = 'Agregar';
+
+          return <MinimalTabIcon focused={focused} color={color} name={name} />;
+        },
+      })}
+    >
+      <AdminTab.Screen 
+        name="AdminDashboard" 
+        component={AdminDashboardScreen} 
+        options={{ title: 'Métricas' }} 
+      />
+      <AdminTab.Screen 
+        name="AdminOrders" 
+        component={AdminOrdersScreen} 
+        options={{ title: 'Órdenes' }} 
+      />
+      <AdminTab.Screen 
+        name="AdminAddProduct" 
+        component={AdminAddProductScreen} 
+        options={{ title: 'Agregar' }} 
+      />
+    </AdminTab.Navigator>
+  );
+}
+
+/**
+ * 4. RootNavigator: Enrutador Raíz y Gestor de Flujos con Seguridad por Rol
  */
 export default function RootNavigator() {
+  const { user } = useAuth();
+
   return (
     <RootStack.Navigator
       screenOptions={{
@@ -164,48 +234,50 @@ export default function RootNavigator() {
         contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      {/* Flujo de Inicio / Autenticación */}
-      <RootStack.Screen name="Auth" component={AuthNavigator} />
-      
-      {/* Flujo Principal */}
-      <RootStack.Screen name="Main" component={MainTabNavigator} />
-      
-      {/* Flujo de Compra y Tracking (Se superponen de manera fluida y elegante sobre las pestañas) */}
-      <RootStack.Screen 
-        name="Checkout" 
-        component={CheckoutScreen} 
-        options={{
-          animation: 'slide_from_bottom',
-        }}
-      />
-      <RootStack.Screen 
-        name="Tracking" 
-        component={TrackingScreen} 
-        options={{
-          animation: 'slide_from_right',
-        }}
-      />
+      {user === null ? (
+        // Flujo de Inicio / Autenticación
+        <RootStack.Screen name="Auth" component={AuthNavigator} />
+      ) : user.role === 'ADMIN' ? (
+        // Flujo de Administrador
+        <RootStack.Screen name="AdminMain" component={AdminTabNavigator} />
+      ) : user.role === 'MOTORIZADO' ? (
+        // Flujo de Motorizado
+        <RootStack.Screen name="MotorizadoMain" component={MotorizadoDashboardScreen} />
+      ) : (
+        // Flujo de Cliente (Default)
+        <>
+          <RootStack.Screen name="Main" component={MainTabNavigator} />
+          <RootStack.Screen 
+            name="Checkout" 
+            component={CheckoutScreen} 
+            options={{
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <RootStack.Screen 
+            name="Tracking" 
+            component={TrackingScreen} 
+            options={{
+              animation: 'slide_from_right',
+            }}
+          />
+        </>
+      )}
     </RootStack.Navigator>
   );
 }
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 36,
-    width: 48,
+  tabBarLine: {
+    width: 24,
+    height: 3,
+    borderRadius: 1.5,
+    marginTop: 6,
   },
-  iconText: {
-    fontSize: theme.typography.sizes.bodyLarge,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  iconIndicator: {
-    position: 'absolute',
-    bottom: -4,
-    width: 6,
-    height: 6,
-    borderRadius: theme.borderRadius.round,
+  tabBarLineActive: {
     backgroundColor: theme.colors.primary,
+  },
+  tabBarLineInactive: {
+    backgroundColor: 'transparent',
   },
 });

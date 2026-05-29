@@ -9,13 +9,16 @@ import {
   FlatList, 
   TouchableOpacity,
   Dimensions,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { ProductCard } from '../../components/ProductCard';
-import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
+import { Product } from '../../assets/productsData';
 import { useNavigation } from '@react-navigation/native';
+import { useCart } from '../../context/CartContext';
+import { useData } from '../../context/DataContext';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../../navigation/navigation';
 
@@ -30,17 +33,19 @@ const CATEGORIES: ('Todos' | 'Amaderados' | 'Orientales' | 'Florales' | 'Cítric
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const { addToCart } = useCart();
+  const { products } = useData();
 
   // Filtrar productos según la familia olfativa seleccionada
   const getFilteredProducts = () => {
     if (selectedCategory === 'Todos') {
-      return PRODUCTS_MOCK;
+      return products;
     }
-    return PRODUCTS_MOCK.filter(p => p.category === selectedCategory);
+    return products.filter(p => p.category === selectedCategory);
   };
 
   // Filtrar novedades para el scroll horizontal
-  const newProducts = PRODUCTS_MOCK.filter(p => p.isNew);
+  const newProducts = products.filter(p => p.isNew);
 
   const handleExploreCatalog = () => {
     // Redirigir al tab del catálogo
@@ -51,6 +56,11 @@ export default function HomeScreen() {
     // En un flujo real, iría al ProductDetailsScreen. 
     // Por ahora, simulamos o alertamos elegantemente.
     console.log(`Ver detalles del perfume: ${product.name}`);
+  };
+
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
+    Alert.alert('Noir Essence', `"${product.name}" se añadió a tu bolsa de compras.`);
   };
 
   return (
@@ -154,6 +164,7 @@ export default function HomeScreen() {
                   imageUrl={item.imageUrl}
                   isNew={item.isNew}
                   onPress={() => handleProductPress(item)}
+                  onAddToCartPress={() => handleAddToCart(item)}
                 />
               )}
             />
@@ -177,6 +188,7 @@ export default function HomeScreen() {
                 imageUrl={product.imageUrl}
                 isNew={product.isNew}
                 onPress={() => handleProductPress(product)}
+                onAddToCartPress={() => handleAddToCart(product)}
               />
             ))}
           </View>
