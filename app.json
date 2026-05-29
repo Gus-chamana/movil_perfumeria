@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Noir Essence",
+    "slug": "noir-essence",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/.gitkeep",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0D0D"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D0D0D"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# dependencias locales
+node_modules/
+
+# archivos de compilación y temporales de Expo
+.expo/
+dist/
+web-build/
+
+# logs de gestores de paquetes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# archivos del sistema
+.DS_Store
+Thumbs.db
