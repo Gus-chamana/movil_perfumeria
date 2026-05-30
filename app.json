@@ -17,7 +17,8 @@
       "package": "com.guschamana.noirenssence",
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D"
-      }
+      },
+      "usesCleartextTraffic": true
     },
     "extra": {
       "eas": {
