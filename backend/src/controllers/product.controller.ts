@@ -291,3 +291,121 @@ export const getFavorites = async (
     next(error);
   }
 };
+
+export const createProduct = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { 
+      nombre, 
+      marca, 
+      descripcion, 
+      categoria, 
+      gender, 
+      precio, 
+      size, 
+      concentration, 
+      stock, 
+      imagenUrl 
+    } = req.body;
+
+    if (!nombre || !marca || !descripcion || !categoria || !gender || !precio || !size || !concentration) {
+      return res.status(400).json({
+        success: false,
+        error: 'Todos los campos básicos del producto y su variante son obligatorios.'
+      });
+    }
+
+    // Buscar los AtributoValor correspondientes
+    const sizeVal = await prisma.atributoValor.findFirst({
+      where: { valor: size, atributo: { nombre: 'Tamaño' } }
+    });
+    const concVal = await prisma.atributoValor.findFirst({
+      where: { valor: concentration, atributo: { nombre: 'Concentración' } }
+    });
+
+    let genderDbName = 'Unisex';
+    if (gender === 'men') genderDbName = 'Hombre';
+    else if (gender === 'women') genderDbName = 'Mujer';
+
+    const genderVal = await prisma.atributoValor.findFirst({
+      where: { valor: genderDbName, atributo: { nombre: 'Género' } }
+    });
+
+    const newProduct = await prisma.$transaction(async (tx) => {
+      const p = await tx.producto.create({
+        data: {
+          nombre,
+          marca,
+          descripcion,
+          categoria,
+          gender,
+          esNuevo: true
+        }
+      });
+
+      // Generar un SKU único
+      const cleanMarca = marca.replace(/\s+/g, '').toUpperCase().substring(0, 5);
+      const cleanName = nombre.replace(/\s+/g, '').toUpperCase().substring(0, 5);
+      const cleanSize = size.toUpperCase();
+      const sku = `${cleanMarca}-${cleanName}-${cleanSize}-${Date.now().toString().slice(-4)}`;
+
+      // Imagen por defecto si no se especifica
+      const defaultImg = 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80';
+      const actualImg = imagenUrl || defaultImg;
+
+      const v = await tx.productoVariante.create({
+        data: {
+          productoId: p.id,
+          sku,
+          precio: Number(precio),
+          stock: stock ? Number(stock) : 10,
+          imagenUrl: actualImg
+        }
+      });
+
+      const relationData = [];
+      if (sizeVal) relationData.push({ varianteId: v.id, valorId: sizeVal.id });
+      if (concVal) relationData.push({ varianteId: v.id, valorId: concVal.id });
+      if (genderVal) relationData.push({ varianteId: v.id, valorId: genderVal.id });
+
+      if (relationData.length > 0) {
+        await tx.varianteAtributo.createMany({
+          data: relationData
+        });
+      }
+
+      // Devolver el producto completo formateado para que el frontend lo lea
+      return tx.producto.findUnique({
+        where: { id: p.id },
+        include: {
+          variantes: {
+            include: {
+              atributos: {
+                include: {
+                  valor: {
+                    include: {
+                      atributo: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Producto creado con éxito.',
+      data: formatProduct(newProduct)
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+

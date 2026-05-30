@@ -19,6 +19,7 @@ import TrackingScreen from '../screens/main/TrackingScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminOrdersScreen from '../screens/admin/AdminOrdersScreen';
 import AdminAddProductScreen from '../screens/admin/AdminAddProductScreen';
+import AdminCreateUserScreen from '../screens/admin/AdminCreateUserScreen'; // Force TS reload
 import MotorizadoDashboardScreen from '../screens/motorizado/MotorizadoDashboardScreen';
 import { useAuth } from '../context/AuthContext';
 
@@ -46,6 +47,7 @@ export type AdminTabParamList = {
   AdminDashboard: undefined;
   AdminOrders: undefined;
   AdminAddProduct: undefined;
+  AdminCreateUser: undefined;
 };
 
 // Parámetros de Navegación para el Stack Raíz de la Aplicación
@@ -197,6 +199,7 @@ export function AdminTabNavigator() {
           if (route.name === 'AdminDashboard') name = 'Métricas';
           else if (route.name === 'AdminOrders') name = 'Órdenes';
           else if (route.name === 'AdminAddProduct') name = 'Agregar';
+          else if (route.name === 'AdminCreateUser') name = 'Usuarios';
 
           return <MinimalTabIcon focused={focused} color={color} name={name} />;
         },
@@ -216,6 +219,11 @@ export function AdminTabNavigator() {
         name="AdminAddProduct" 
         component={AdminAddProductScreen} 
         options={{ title: 'Agregar' }} 
+      />
+      <AdminTab.Screen 
+        name="AdminCreateUser" 
+        component={AdminCreateUserScreen} 
+        options={{ title: 'Usuarios' }} 
       />
     </AdminTab.Navigator>
   );

@@ -1,5 +1,6 @@
 export interface Product {
   id: string;
+  varianteId?: string;
   brand: string;
   name: string;
   price: number;
@@ -18,7 +19,7 @@ export const PRODUCTS_MOCK: Product[] = [
     brand: 'Noir Essence',
     name: 'Oud Mystique',
     price: 420.00,
-    imageUrl: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?q=80&w=400',
+    imageUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/Productos/Allblackcyzone.webp',
     category: 'Amaderados',
     gender: 'unisex',
     size: '100ml',

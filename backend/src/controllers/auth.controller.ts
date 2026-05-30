@@ -16,10 +16,10 @@ export const registerStep1 = async (
   try {
     const { email, password, nombre, apellidoPaterno, apellidoMaterno, dni } = req.body;
 
-    if (!email || !password || !nombre || !apellidoPaterno || !dni) {
+    if (!email || !password || !nombre || !apellidoPaterno || !apellidoMaterno || !dni) {
       return res.status(400).json({
         success: false,
-        error: 'Todos los campos obligatorios (email, password, nombre, apellidoPaterno, dni) son requeridos.'
+        error: 'Todos los campos obligatorios (email, password, nombre, apellidoPaterno, apellidoMaterno, dni) son requeridos.'
       });
     }
 

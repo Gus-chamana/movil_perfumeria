@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -13,20 +13,41 @@ import {
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useData, Order } from '../../context/DataContext';
-
-const MOTORIZADOS_LIST = [
-  { id: 'm1', name: 'Juan Motorizado' },
-  { id: 'm2', name: 'Pedro Delivery' },
-  { id: 'm3', name: 'Carlos Envíos' },
-];
+import { useAuth } from '../../context/AuthContext';
+import { getMotorizadosAPI } from '../../services/apiService';
 
 export default function AdminOrdersScreen() {
   const { orders, assignMotorizado } = useData();
+  const { token } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState<'TODOS' | 'PENDIENTES' | 'ASIGNADOS'>('TODOS');
   
-  // Estados para modal de asignación
+  // Estados para modal de asignación y lista de motorizados de la BD
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [motorizadosList, setMotorizadosList] = useState<{ id: string, name: string }[]>([]);
+
+  useEffect(() => {
+    const loadMotorizados = async () => {
+      if (token) {
+        try {
+          const list = await getMotorizadosAPI(token);
+          const mapped = list.map((m: any) => ({
+            id: m.id,
+            name: m.nombre
+          }));
+          setMotorizadosList(mapped);
+        } catch (error) {
+          console.warn('Error al cargar motorizados reales:', error);
+          setMotorizadosList([
+            { id: 'm1', name: 'Juan Motorizado (Offline)' },
+            { id: 'm2', name: 'Pedro Delivery (Offline)' },
+            { id: 'm3', name: 'Carlos Envíos (Offline)' },
+          ]);
+        }
+      }
+    };
+    loadMotorizados();
+  }, [token]);
 
   // Filtrado de órdenes
   const filteredOrders = orders.filter(order => {
@@ -41,17 +62,21 @@ export default function AdminOrdersScreen() {
     setAssignModalVisible(true);
   };
 
-  const handleSelectMotorizado = (motorizadoName: string) => {
+  const handleSelectMotorizado = async (motorizadoId: string, motorizadoName: string) => {
     if (!selectedOrder) return;
 
-    assignMotorizado(selectedOrder.id, motorizadoName);
+    try {
+      await assignMotorizado(selectedOrder.id, motorizadoId);
 
-    setAssignModalVisible(false);
-    setSelectedOrder(null);
-    Alert.alert(
-      'Asignación Exitosa', 
-      `El pedido ${selectedOrder.id} ha sido asignado a ${motorizadoName} y su estado cambió a PREPARANDO.`
-    );
+      setAssignModalVisible(false);
+      setSelectedOrder(null);
+      Alert.alert(
+        'Asignación Exitosa', 
+        `El pedido ${selectedOrder.id} ha sido asignado a ${motorizadoName} y su estado cambió a PREPARANDO.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar la asignación.');
+    }
   };
 
   const getStatusStyle = (status: string) => {
@@ -168,11 +193,11 @@ export default function AdminOrdersScreen() {
             </Text>
 
             <View style={styles.modalList}>
-              {MOTORIZADOS_LIST.map((moto) => (
+              {motorizadosList.map((moto) => (
                 <TouchableOpacity
                   key={moto.id}
                   activeOpacity={0.7}
-                  onPress={() => handleSelectMotorizado(moto.name)}
+                  onPress={() => handleSelectMotorizado(moto.id, moto.name)}
                   style={styles.motoSelectItem}
                 >
                   <Text style={styles.motoSelectName}>{moto.name}</Text>

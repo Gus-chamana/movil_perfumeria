@@ -15,16 +15,16 @@ import { DataProvider } from './src/context/DataContext';
 export default function App() {
   return (
     <SafeAreaProvider>
-      <DataProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <DataProvider>
           <CartProvider>
             <NavigationContainer>
               <StatusBar barStyle="light-content" />
               <RootNavigator />
             </NavigationContainer>
           </CartProvider>
-        </AuthProvider>
-      </DataProvider>
+        </DataProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

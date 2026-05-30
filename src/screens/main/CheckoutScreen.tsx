@@ -14,10 +14,12 @@ import { theme } from '../../theme/theme';
 import { CustomInput } from '../../components/CustomInput';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
-import { useCart } from '../../context/CartContext';
+import { useCart, CartItem } from '../../context/CartContext';
 import { useData } from '../../context/DataContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../context/AuthContext';
+import { createOrderAPI } from '../../services/apiService';
 
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
 
@@ -26,10 +28,10 @@ type PaymentMethodType = 'yape' | 'plin' | 'card' | null;
 export default function CheckoutScreen() {
   const navigation = useNavigation<CheckoutScreenNavigationProp>();
   const { cartItems, clearCart } = useCart();
-  const { createOrder } = useData();
+  const { user, token } = useAuth();
 
   // Calcular total real
-  const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const subtotal = cartItems.reduce((acc: number, item: CartItem) => acc + (item.product.price * item.quantity), 0);
   const igv = subtotal * 0.18;
   const shipping = subtotal > 0 ? 15.00 : 0.00;
   const total = subtotal + igv + shipping;
@@ -90,8 +92,14 @@ export default function CheckoutScreen() {
     }
   };
 
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     setPaymentError('');
+
+    if (!token) {
+      setPaymentError('Debe iniciar sesión para realizar la compra.');
+      alert('Por favor, inicie sesión antes de realizar el pago.');
+      return;
+    }
 
     if (!paymentMethod) {
       setPaymentError('Por favor, selecciona un método de pago.');
@@ -115,26 +123,40 @@ export default function CheckoutScreen() {
       }
     }
 
-    // Simular Transacción Financiera
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // Registrar la orden en el backend usando Supabase
+      const orderResult = await createOrderAPI({
+        nuevaDireccion: {
+          direccion: address.trim(),
+          departamento: 'Lima',
+          provincia: 'Lima',
+          distrito: city.trim(),
+          referencia: '',
+        },
+        metodoPago: paymentMethod === 'card' ? 'TARJETA' : (paymentMethod === 'yape' ? 'YAPE' : 'PLIN'),
+        telefonoPago: (paymentMethod === 'yape' || paymentMethod === 'plin') ? walletPhone.trim() : undefined,
+        datosTarjeta: paymentMethod === 'card' ? {
+          numeroTarjeta: cardNumber.trim(),
+          fechaVencimiento: cardExpiry.trim(),
+          cvv: cardCVV.trim(),
+        } : undefined,
+        receptorNombre: user?.name || 'Cliente Noir',
+        receptorDni: user?.dni || '00000000',
+      }, token);
+
       setLoading(false);
-      
-      // Registrar la orden en el DataContext real
-      const orderId = createOrder(
-        'Gabriela Alva', // Se puede asociar al usuario logueado en un flujo real
-        `${address}, ${city}`,
-        phone,
-        cartItems,
-        total
-      );
 
       // Vaciar carrito
       clearCart();
       
       // Redirigir directamente al Tracking con el ID del pedido generado
-      navigation.replace('Tracking', { orderId });
-    }, 2200);
+      navigation.replace('Tracking', { orderId: orderResult.orderId });
+    } catch (error: any) {
+      setLoading(false);
+      setPaymentError(error.message || 'Error al procesar el pedido. Inténtelo de nuevo.');
+      alert(error.message || 'No se pudo completar la orden.');
+    }
   };
 
   const handleBack = () => {

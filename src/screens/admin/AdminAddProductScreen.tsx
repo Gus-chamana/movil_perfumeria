@@ -45,7 +45,7 @@ export default function AdminAddProductScreen() {
   
   const [loading, setLoading] = useState(false);
 
-  const handleCreateProduct = () => {
+  const handleCreateProduct = async () => {
     let valid = true;
     setNameError('');
     setPriceError('');
@@ -76,11 +76,9 @@ export default function AdminAddProductScreen() {
     if (!valid) return;
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      
-      // Añadir al catálogo reactivo global
-      addProduct({
+    try {
+      // Añadir al catálogo reactivo global y base de datos de Supabase
+      await addProduct({
         brand,
         name,
         price: priceNum,
@@ -92,6 +90,7 @@ export default function AdminAddProductScreen() {
         description
       });
 
+      setLoading(false);
       Alert.alert(
         'Fragancia Creada',
         `El perfume "${name}" (${brand}) ha sido añadido con éxito al catálogo Noir en la familia ${category} por S/. ${priceNum.toFixed(2)}.`
@@ -100,7 +99,10 @@ export default function AdminAddProductScreen() {
       setName('');
       setPrice('');
       setDescription('');
-    }, 1500);
+    } catch (error) {
+      setLoading(false);
+      Alert.alert('Error', 'No se pudo crear la fragancia en el catálogo de Supabase.');
+    }
   };
 
   return (

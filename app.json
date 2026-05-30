@@ -4,7 +4,7 @@
     "slug": "noir-essence",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/.gitkeep",
+    "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "resizeMode": "contain",
@@ -15,7 +15,14 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#0D0D0D"
+      },
+      "package": "com.karius.noiressence"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "471ab575-0533-4d05-9329-abfcdad5c63f"
       }
     }
   }

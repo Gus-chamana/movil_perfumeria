@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -6,42 +6,142 @@ import {
   SafeAreaView, 
   ScrollView, 
   TouchableOpacity,
-  StatusBar
+  StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useData } from '../../context/DataContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../context/AuthContext';
+import { getOrderByIdAPI } from '../../services/apiService';
 
 type TrackingScreenRouteProp = RouteProp<RootStackParamList, 'Tracking'>;
 type TrackingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Tracking'>;
 
-interface TimelineEvent {
-  title: string;
-  time: string;
-  description: string;
-  status: 'completed' | 'active' | 'pending';
-}
-
 export default function TrackingScreen() {
   const route = useRoute<TrackingScreenRouteProp>();
   const navigation = useNavigation<TrackingScreenNavigationProp>();
-  const { orders } = useData();
+  const { token } = useAuth();
   
   // Capturar el ID del pedido generado o por defecto
   const orderId = route.params?.orderId || 'NE-49201';
+  
+  const [order, setOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Encontrar la orden correspondiente en la base de datos real compartida
-  const order = orders.find(o => o.id === orderId) || orders[0];
+  useEffect(() => {
+    const loadOrderData = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const data = await getOrderByIdAPI(orderId, token);
+        setOrder(data);
+        setError(null);
+      } catch (err: any) {
+        console.warn('Error cargando tracking real:', err);
+        setError('No se pudo conectar al servidor de Supabase. Mostrando fallback.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const TIMELINE_EVENTS = order.timeline;
+    loadOrderData();
+    // Consulta en segundo plano cada 10 segundos
+    const interval = setInterval(loadOrderData, 10000);
+    return () => clearInterval(interval);
+  }, [orderId, token]);
 
   const handleReturnHome = () => {
-    // Regresa a la pestaña principal del Core (HomeScreen)
     navigation.replace('Main');
   };
+
+  // Fallback local en caso de error o de no estar logueado
+  const getFallbackOrder = () => {
+    return {
+      id: orderId,
+      direccionEnvio: 'Av. Javier Prado Este 1024, San Borja, Lima',
+      estado: 'CREADO',
+      envio: {
+        numeroTracking: 'NX-1934',
+        tiempoEstimado: '30-50 min',
+        motorizado: null,
+        estados: []
+      }
+    };
+  };
+
+  const activeOrder = order || getFallbackOrder();
+
+  // Mapear los estados del backend a la bitácora del envío
+  const getTimelineFromOrder = (ord: any) => {
+    const currentStatus = ord.estado; // 'CREADO' | 'PREPARANDO' | 'EN_RUTA' | 'ENTREGADO'
+
+    const getStatusTime = (status: string) => {
+      const found = ord.envio?.estados?.find((e: any) => e.estado === status);
+      if (found) {
+        const d = new Date(found.fecha);
+        const hours = d.getHours();
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        return `${hours % 12 || 12}:${minutes} ${ampm}`;
+      }
+      if (status === 'CREADO' && ord.createdAt) {
+        const d = new Date(ord.createdAt);
+        return `${d.getHours() % 12 || 12}:${d.getMinutes().toString().padStart(2, '0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
+      }
+      return 'Estimado';
+    };
+
+    return [
+      {
+        title: 'Pedido Confirmado',
+        time: getStatusTime('CREADO'),
+        description: 'Tu transacción ha sido validada de forma exitosa en Supabase.',
+        status: 'completed' as const,
+      },
+      {
+        title: 'Preparación y Embalaje de Lujo',
+        time: getStatusTime('PREPARANDO') !== 'Estimado' ? getStatusTime('PREPARANDO') : (currentStatus === 'PREPARANDO' ? 'En proceso' : 'Estimado'),
+        description: 'Tu fragancia premium está siendo sellada y empacada con envoltura protectora.',
+        status: currentStatus === 'CREADO' ? 'pending' : (currentStatus === 'PREPARANDO' ? 'active' : 'completed') as any,
+      },
+      {
+        title: 'En Camino a tu Destino',
+        time: getStatusTime('EN_RUTA'),
+        description: ord.envio?.motorizado 
+          ? `Asignado a ${ord.envio.motorizado.nombre}. El motorizado exclusivo va en ruta.` 
+          : 'Esperando asignación de motorizado del conserje.',
+        status: (currentStatus === 'CREADO' || currentStatus === 'PREPARANDO') ? 'pending' : (currentStatus === 'EN_RUTA' ? 'active' : 'completed') as any,
+      },
+      {
+        title: 'Entrega en Puerta',
+        time: getStatusTime('ENTREGADO'),
+        description: 'Fragancia entregada de manera exitosa en mano propia.',
+        status: currentStatus === 'ENTREGADO' ? 'completed' : 'pending' as any,
+      },
+    ];
+  };
+
+  const TIMELINE_EVENTS = getTimelineFromOrder(activeOrder);
+
+  if (loading && !order) {
+    return (
+      <SafeAreaView style={[styles.container, styles.center]}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Conectando con Supabase...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const motorizadoNombre = activeOrder.envio?.motorizado?.nombre;
+  const motorizadoTelefono = activeOrder.envio?.motorizado?.telefono;
+  const placaVehiculo = activeOrder.envio?.motorizado?.placaVehiculo;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,27 +150,35 @@ export default function TrackingScreen() {
       {/* Cabecera */}
       <View style={styles.header}>
         <Text style={styles.headerSubtitle}>SEGUIMIENTO EN TIEMPO REAL</Text>
-        <Text style={styles.orderIdText}>{orderId}</Text>
+        <Text style={styles.orderIdText}>{activeOrder.envio?.numeroTracking || orderId}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+          </View>
+        )}
+
         {/* 1. Datos del Despachador / Motorizado (Tarjeta Flotante Premium) */}
         <View style={styles.dispatcherCard}>
           <View style={styles.dispatcherInfoRow}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarCircleText}>
-                {order.motorizado ? order.motorizado.split(' ').map(n => n[0]).join('').toUpperCase() : 'NE'}
+                {motorizadoNombre ? motorizadoNombre.split(' ').map((n: any) => n[0]).join('').toUpperCase() : 'NE'}
               </Text>
             </View>
             <View style={styles.dispatcherMeta}>
-              <Text style={styles.driverName}>{order.motorizado || 'Por asignar despachador'}</Text>
+              <Text style={styles.driverName}>{motorizadoNombre || 'Por asignar despachador'}</Text>
               <Text style={styles.vehicleType}>
-                {order.motorizado ? 'Repartidor Noir Conciérge' : 'Esperando preparación...'}
+                {motorizadoNombre 
+                  ? `Repartidor Noir Conciérge · Tel: ${motorizadoTelefono || 'N/A'}` 
+                  : 'Tu pedido está en proceso de facturación y embalaje.'}
               </Text>
             </View>
             <View style={styles.plateBadge}>
-              <Text style={styles.plateText}>{order.motorizado ? 'NG-5830' : '---'}</Text>
+              <Text style={styles.plateText}>{placaVehiculo || '---'}</Text>
             </View>
           </View>
           
@@ -78,7 +186,7 @@ export default function TrackingScreen() {
           
           <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
           <Text style={styles.deliveryAddress}>
-            {order.address}
+            {activeOrder.direccionEnvio}
           </Text>
         </View>
 
@@ -157,6 +265,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: theme.spacing.md,
+    fontFamily: theme.typography.fontFamily.body,
+    color: theme.colors.textSecondary,
+    fontSize: theme.typography.sizes.bodyMedium,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+  },
+  errorBannerText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.error,
+    textAlign: 'center',
   },
   header: {
     paddingHorizontal: theme.spacing.lg,
@@ -303,7 +435,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   nodeCompleted: {
-    backgroundColor: theme.colors.primary, // Nodos completados dorados
+    backgroundColor: theme.colors.primary,
   },
   nodeActive: {
     backgroundColor: theme.colors.background,
@@ -322,15 +454,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     position: 'absolute',
     top: 14,
-    bottom: -theme.spacing.lg - 6, // Conecta elegantemente con el siguiente nodo
+    bottom: -theme.spacing.lg - 6,
     zIndex: 1,
   },
   lineCompleted: {
-    backgroundColor: theme.colors.primary, // Línea de conexión completada en dorado
+    backgroundColor: theme.colors.primary,
   },
   eventBody: {
     flex: 1,
-    marginTop: -2, // Alinea perfectamente el texto con el nodo circular
+    marginTop: -2,
   },
   eventHeaderRow: {
     flexDirection: 'row',

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { 
   getOrderTracking, 
   assignMotorizado, 
-  updateTrackingStatus 
+  updateTrackingStatus,
+  getMotorizadosList
 } from '../controllers/tracking.controller';
 import { authenticateToken, requireRole } from '../middlewares/auth';
 import { Role } from '@prisma/client';
@@ -11,6 +12,9 @@ const router = Router();
 
 // Todas las rutas de tracking requieren autenticación
 router.use(authenticateToken);
+
+// Listar motorizados (solo Administradores)
+router.get('/motorizados', requireRole([Role.ADMIN]), getMotorizadosList);
 
 // Clientes, Admins y Motorizados pueden ver el tracking
 router.get('/:id/tracking', getOrderTracking);

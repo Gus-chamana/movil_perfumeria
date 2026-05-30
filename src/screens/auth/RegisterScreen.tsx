@@ -16,11 +16,14 @@ import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../context/AuthContext';
+import { registerStep1API, registerStep2API } from '../../services/apiService';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Auth'>;
 
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const { updateUser } = useAuth();
   
   // Control de Pasos (1: Datos de Acceso, 2: Dirección Principal)
   const [step, setStep] = useState<1 | 2>(1);
@@ -33,7 +36,10 @@ export default function RegisterScreen() {
   // ESTADOS DEL FORMULARIO
   // ==========================================
   // Paso 1: Datos de Acceso
-  const [fullName, setFullName] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [apellidoPaterno, setApellidoPaterno] = useState('');
+  const [apellidoMaterno, setApellidoMaterno] = useState('');
+  const [dni, setDni] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -49,6 +55,9 @@ export default function RegisterScreen() {
   // ==========================================
   // Errores Paso 1
   const [nameError, setNameError] = useState('');
+  const [apPaternoError, setApPaternoError] = useState('');
+  const [apMaternoError, setApMaternoError] = useState('');
+  const [dniError, setDniError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
@@ -74,13 +83,37 @@ export default function RegisterScreen() {
   const handleNextStep = () => {
     let valid = true;
     setNameError('');
+    setApPaternoError('');
+    setApMaternoError('');
+    setDniError('');
     setEmailError('');
     setPasswordError('');
     setConfirmPasswordError('');
 
     // Validación Nombre
-    if (!fullName.trim()) {
-      setNameError('El nombre completo es requerido.');
+    if (!nombre.trim()) {
+      setNameError('El nombre es requerido.');
+      valid = false;
+    }
+
+    // Validación Apellido Paterno
+    if (!apellidoPaterno.trim()) {
+      setApPaternoError('El apellido paterno es requerido.');
+      valid = false;
+    }
+
+    // Validación Apellido Materno
+    if (!apellidoMaterno.trim()) {
+      setApMaternoError('El apellido materno es requerido.');
+      valid = false;
+    }
+
+    // Validación DNI
+    if (!dni.trim()) {
+      setDniError('El DNI es requerido.');
+      valid = false;
+    } else if (dni.trim().length !== 8 || isNaN(Number(dni.trim()))) {
+      setDniError('El DNI debe ser numérico de 8 dígitos.');
       valid = false;
     }
 
@@ -123,7 +156,7 @@ export default function RegisterScreen() {
     animateProgressBar(0.5); // Regresa a 50%
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     let valid = true;
     setAddressError('');
     setCityError('');
@@ -152,13 +185,49 @@ export default function RegisterScreen() {
 
     if (!valid) return;
 
-    // Simular registro y creación de cuenta
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // 1. Registrar Paso 1 (Creación de cuenta en Supabase)
+      const step1Result = await registerStep1API({
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+        nombre: nombre.trim(),
+        apellidoPaterno: apellidoPaterno.trim(),
+        apellidoMaterno: apellidoMaterno.trim(),
+        dni: dni.trim(),
+      });
+
+      // 2. Registrar Paso 2 (Dirección principal vinculada al token del paso 1)
+      const token = step1Result.token;
+      await registerStep2API({
+        direccion: address.trim(),
+        departamento: 'Lima',
+        provincia: 'Lima',
+        distrito: city.trim(),
+        referencia: zipCode ? `Código postal: ${zipCode}` : '',
+      }, token);
+
+      // 3. Loguear al usuario en el contexto
+      updateUser({
+        id: step1Result.usuario.id,
+        name: `${nombre.trim()} ${apellidoPaterno.trim()} ${apellidoMaterno.trim()}`,
+        email: step1Result.usuario.email,
+        role: step1Result.usuario.rol,
+        dni: dni.trim(),
+        direcciones: [{
+          direccion: address.trim(),
+          distrito: city.trim(),
+          departamento: 'Lima',
+          provincia: 'Lima',
+        }],
+      }, token);
+
       setLoading(false);
-      // Navegación directa al Main
       navigation.replace('Main');
-    }, 1800);
+    } catch (error: any) {
+      setLoading(false);
+      alert(error.message || 'Ocurrió un error al registrarse. Inténtelo de nuevo.');
+    }
   };
 
   const handleGoToLogin = () => {
@@ -209,12 +278,40 @@ export default function RegisterScreen() {
             {step === 1 && (
               <View style={styles.stepContent}>
                 <CustomInput
-                  label="Nombre Completo"
+                  label="Nombre(s)"
                   placeholder="Gustavo Alonso"
-                  value={fullName}
-                  onChangeText={setFullName}
+                  value={nombre}
+                  onChangeText={setNombre}
                   error={nameError}
                   autoCapitalize="words"
+                />
+
+                <CustomInput
+                  label="Apellido Paterno"
+                  placeholder="Silva"
+                  value={apellidoPaterno}
+                  onChangeText={setApellidoPaterno}
+                  error={apPaternoError}
+                  autoCapitalize="words"
+                />
+
+                <CustomInput
+                  label="Apellido Materno"
+                  placeholder="Gomez"
+                  value={apellidoMaterno}
+                  onChangeText={setApellidoMaterno}
+                  error={apMaternoError}
+                  autoCapitalize="words"
+                />
+
+                <CustomInput
+                  label="DNI"
+                  placeholder="DNI de 8 dígitos"
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  value={dni}
+                  onChangeText={setDni}
+                  error={dniError}
                 />
 
                 <CustomInput

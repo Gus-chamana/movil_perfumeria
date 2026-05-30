@@ -236,3 +236,22 @@ export const updateTrackingStatus = async (
     next(error);
   }
 };
+
+export const getMotorizadosList = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const motorizados = await prisma.motorizado.findMany({
+      where: { activo: true }
+    });
+    return res.json({
+      success: true,
+      data: motorizados
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

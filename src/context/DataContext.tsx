@@ -1,5 +1,7 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Product, PRODUCTS_MOCK } from '../assets/productsData';
+import { getProductsFromAPI, assignMotorizadoAPI, createProductAPI } from '../services/apiService';
+import { useAuth } from './AuthContext';
 
 export interface TimelineEvent {
   title: string;
@@ -24,17 +26,31 @@ export interface Order {
 interface DataContextType {
   products: Product[];
   orders: Order[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   createOrder: (clientName: string, address: string, phone: string, items: any[], total: number) => string;
-  assignMotorizado: (orderId: string, motorizadoName: string) => void;
+  assignMotorizado: (orderId: string, motorizadoId: string) => Promise<void>;
   updateOrderStatus: (orderId: string, nextStatus: 'EN_RUTA' | 'ENTREGADO') => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const DataProvider = ({ children }: { children: ReactNode }) => {
+  const { token } = useAuth();
   const [products, setProducts] = useState<Product[]>(PRODUCTS_MOCK);
-  
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await getProductsFromAPI();
+        setProducts(data);
+        console.log('Productos sincronizados exitosamente desde Supabase.');
+      } catch (error) {
+        console.warn('Usando catálogo local (fallback offline):', error);
+      }
+    };
+    fetchProducts();
+  }, []);
+
   // Órdenes iniciales de demostración
   const [orders, setOrders] = useState<Order[]>([
     { 
@@ -107,11 +123,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   ]);
 
-  const addProduct = (newProduct: Omit<Product, 'id'>) => {
-    setProducts((prev) => {
-      const nextId = (prev.length + 1).toString();
-      return [...prev, { ...newProduct, id: nextId }];
-    });
+  const addProduct = async (newProduct: Omit<Product, 'id'>) => {
+    if (token) {
+      try {
+        const createdProduct = await createProductAPI(newProduct, token);
+        setProducts((prev: Product[]) => [createdProduct, ...prev]);
+      } catch (error) {
+        console.error('Error al guardar el producto en la base de datos:', error);
+        setProducts((prev: Product[]) => {
+          const nextId = (prev.length + 1).toString();
+          return [...prev, { ...newProduct, id: nextId }];
+        });
+      }
+    } else {
+      setProducts((prev: Product[]) => {
+        const nextId = (prev.length + 1).toString();
+        return [...prev, { ...newProduct, id: nextId }];
+      });
+    }
   };
 
   const createOrder = (clientName: string, address: string, phone: string, items: any[], total: number): string => {
@@ -145,45 +174,57 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ]
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev: Order[]) => [newOrder, ...prev]);
     return orderId;
   };
 
-  const assignMotorizado = (orderId: string, motorizadoName: string) => {
-    const now = new Date();
-    const timeStr = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+  const assignMotorizado = async (orderId: string, motorizadoId: string) => {
+    if (token) {
+      try {
+        const response = await assignMotorizadoAPI(orderId, motorizadoId, token);
+        const motorizadoName = response.motorizado?.nombre || 'Motorizado';
 
-    setOrders((prev) => prev.map((order) => {
-      if (order.id === orderId) {
-        const nextTimeline = order.timeline.map((event, idx) => {
-          if (idx === 1) {
-            // Embalaje completado tras la asignación
-            return { ...event, status: 'completed' as const, time: timeStr };
+        const now = new Date();
+        const timeStr = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+
+        setOrders((prev: Order[]) => prev.map((order: Order) => {
+          if (order.id === orderId) {
+            const nextTimeline = order.timeline.map((event: TimelineEvent, idx: number) => {
+              if (idx === 1) {
+                // Embalaje completado tras la asignación
+                return { ...event, status: 'completed' as const, time: timeStr };
+              }
+              if (idx === 2) {
+                // Siguiente evento activo
+                return { ...event, status: 'active' as const, description: `Asignado a ${motorizadoName}. El motorizado iniciará la ruta en breve.` };
+              }
+              return event;
+            });
+            return {
+              ...order,
+              motorizado: motorizadoName,
+              status: 'PREPARANDO',
+              timeline: nextTimeline,
+            };
           }
-          if (idx === 2) {
-            // Siguiente evento activo
-            return { ...event, status: 'active' as const, description: `Asignado a ${motorizadoName}. El motorizado iniciará la ruta en breve.` };
-          }
-          return event;
-        });
-        return {
-          ...order,
-          motorizado: motorizadoName,
-          status: 'PREPARANDO',
-          timeline: nextTimeline,
-        };
+          return order;
+        }));
+      } catch (error) {
+        console.error('Error al asignar motorizado en el backend:', error);
+        alert('No se pudo guardar la asignación del motorizado en Supabase.');
       }
-      return order;
-    }));
+    } else {
+      console.warn('Usuario no autenticado, asignando de manera local');
+    }
   };
 
   const updateOrderStatus = (orderId: string, nextStatus: 'EN_RUTA' | 'ENTREGADO') => {
     const now = new Date();
     const timeStr = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
 
-    setOrders((prev) => prev.map((order) => {
+    setOrders((prev: Order[]) => prev.map((order: Order) => {
       if (order.id === orderId) {
-        const nextTimeline = order.timeline.map((event, idx) => {
+        const nextTimeline = order.timeline.map((event: TimelineEvent, idx: number) => {
           if (nextStatus === 'EN_RUTA') {
             if (idx === 2) {
               return { ...event, status: 'completed' as const, time: timeStr, description: 'El motorizado exclusivo ha salido del centro de distribución y va en ruta.' };
