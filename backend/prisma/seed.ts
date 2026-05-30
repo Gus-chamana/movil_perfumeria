@@ -6,7 +6,54 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Iniciando la siembra relacional robusta en Supabase...');
 
-  // 1. Asegurar Atributos
+  // 0. Limpiar duplicados de seeds anteriores (productos con UUID auto-generado)
+  console.log('🧹 Limpiando registros duplicados de seeds anteriores...');
+  const fixedProductIds = [
+    'prod-sauvage', 'prod-chanel5', 'prod-aventus', 'prod-bleu', 'prod-black-orchid'
+  ];
+  // Borrar productos viejos que NO son nuestros IDs fijos (duplicados de TRUNCATE + UUID)
+  await prisma.producto.deleteMany({
+    where: {
+      id: { notIn: fixedProductIds },
+      nombre: { in: ['Sauvage', 'N°5', 'Aventus', 'Bleu de Chanel', 'Black Orchid'] }
+    }
+  });
+  // Borrar variante_atributos y variantes existentes de nuestros productos fijos para re-crearlas limpiamente
+  const fixedVarianteIds = [
+    'var-sauvage-100ml-edp', 'var-sauvage-200ml-edt',
+    'var-chanel5-50ml-parfum', 'var-chanel5-100ml-edp',
+    'var-creed-100ml-edp',
+    'var-bleu-100ml-edp',
+    'var-tf-blorq-50ml-edp', 'var-tf-blorq-100ml-edp'
+  ];
+  await prisma.varianteAtributo.deleteMany({
+    where: { varianteId: { in: fixedVarianteIds } }
+  });
+  await prisma.productoVariante.deleteMany({
+    where: { id: { in: fixedVarianteIds } }
+  });
+  // Also clean old UUID-based variants by SKU (from previous TRUNCATE-based seeds)
+  const fixedSkus = [
+    'DIOR-SAUV-100-EDP', 'DIOR-SAUV-200-EDT',
+    'CHANEL-N5-50-PARF', 'CHANEL-N5-100-EDP',
+    'CREED-AV-100-EDP',
+    'CHANEL-BLEU-100-EDP',
+    'TF-BLORQ-50-EDP', 'TF-BLORQ-100-EDP'
+  ];
+  // Delete varianteAtributos for old UUID variants matching these SKUs
+  const oldVariants = await prisma.productoVariante.findMany({
+    where: { sku: { in: fixedSkus } },
+    select: { id: true }
+  });
+  if (oldVariants.length > 0) {
+    await prisma.varianteAtributo.deleteMany({
+      where: { varianteId: { in: oldVariants.map(v => v.id) } }
+    });
+    await prisma.productoVariante.deleteMany({
+      where: { sku: { in: fixedSkus } }
+    });
+  }
+  console.log('✔️ Duplicados limpiados.');
   console.log('📦 Asegurando Atributos de Variantes...');
   let attrTamanioId = 'attr-tamanio';
   let attrConcentracionId = 'attr-concentracion';
@@ -84,7 +131,7 @@ async function main() {
       marca: 'Dior',
       descripcion: 'Una composición rotundamente fresca, dictada por un nombre que suena como un manifiesto. Radialmente fresca, cruda y noble a la vez.',
       esNuevo: false,
-      categoria: 'Perfumes',
+      categoria: 'Amaderados',
       gender: 'men',
       variantes: [
         {
@@ -111,7 +158,7 @@ async function main() {
       marca: 'Chanel',
       descripcion: 'La esencia misma de la feminidad. Un bouquet floral aldehído, sublimado por un frasco icónico con líneas minimalistas.',
       esNuevo: false,
-      categoria: 'Perfumes',
+      categoria: 'Florales',
       gender: 'women',
       variantes: [
         {
@@ -138,7 +185,7 @@ async function main() {
       marca: 'Creed',
       descripcion: 'Celebrando la fuerza, el poder y el éxito, esta fragancia gourmet afrutada y rica es perfecta para el hombre contemporáneo audaz.',
       esNuevo: true,
-      categoria: 'Perfumes',
+      categoria: 'Cítricos',
       gender: 'men',
       variantes: [
         {
@@ -157,7 +204,7 @@ async function main() {
       marca: 'Chanel',
       descripcion: 'El elogio de la libertad masculina en un acorde aromático amaderado con una estela cautivadora. Un aroma atemporal y sensual.',
       esNuevo: true,
-      categoria: 'Perfumes',
+      categoria: 'Amaderados',
       gender: 'men',
       variantes: [
         {
@@ -176,7 +223,7 @@ async function main() {
       marca: 'Tom Ford',
       descripcion: 'Una fragancia lujosa y sensual de acordes oscuros e intrigantes, combinada con una rica poción de orquídeas negras y especias.',
       esNuevo: false,
-      categoria: 'Perfumes',
+      categoria: 'Orientales',
       gender: 'unisex',
       variantes: [
         {
