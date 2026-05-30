@@ -16,11 +16,13 @@ import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../services/AuthContext';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Auth'>;
 
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const { registerUser, loginUser } = useAuth();
   
   // Control de Pasos (1: Datos de Acceso, 2: Dirección Principal)
   const [step, setStep] = useState<1 | 2>(1);
@@ -123,7 +125,7 @@ export default function RegisterScreen() {
     animateProgressBar(0.5); // Regresa a 50%
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     let valid = true;
     setAddressError('');
     setCityError('');
@@ -152,13 +154,36 @@ export default function RegisterScreen() {
 
     if (!valid) return;
 
-    // Simular registro y creación de cuenta
+    // Lógica avanzada para dividir Nombre Completo en Nombre y Apellido
+    const nameParts = fullName.trim().split(' ');
+    const name = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || 'Alonso';
+
+    const formData = {
+      email,
+      password,
+      name,
+      lastName,
+      // DNI ficticio de 8 dígitos para cumplir con el esquema PostgreSQL
+      dni: `9${Math.floor(1000000 + Math.random() * 9000000)}`,
+      address,
+      district: city,
+      phone
+    };
+
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      // Navegación directa al Main
+    try {
+      // 1. Llamar al endpoint de registro del backend
+      await registerUser(formData);
+      // 2. Tras registrarse, iniciar sesión automáticamente
+      await loginUser(email, password);
+      // 3. Redirigir al flujo principal de la App
       navigation.replace('Main');
-    }, 1800);
+    } catch (error: any) {
+      setAddressError(error.message || 'Ocurrió un error al completar el registro.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoToLogin = () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -13,48 +13,39 @@ import {
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
+import { Product } from '../../assets/productsData';
+import { cartService, CartItem } from '../../services/cartService';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
 
 export default function CartScreen() {
   const navigation = useNavigation<CartScreenNavigationProp>();
   
-  // Inicializamos el carrito con 2 perfumes de lujo para demostrar el cálculo interactivo
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    { product: PRODUCTS_MOCK[0], quantity: 1 }, // Oud Mystique
-    { product: PRODUCTS_MOCK[1], quantity: 2 }, // Nuit Intense
-  ]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
-  // Manejo de cantidades
+  // Suscribirse de forma reactiva a los cambios globales del carrito
+  useEffect(() => {
+    const unsubscribe = cartService.subscribe((items) => {
+      setCartItems(items);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Manejo de cantidades delegadas al servicio global de carrito
   const handleIncreaseQty = (id: string) => {
-    setCartItems(prev => prev.map(item => 
-      item.product.id === id 
-        ? { ...item, quantity: item.quantity + 1 } 
-        : item
-    ));
+    cartService.increaseQty(id);
   };
 
   const handleDecreaseQty = (id: string) => {
-    setCartItems(prev => prev.map(item => {
-      if (item.product.id === id) {
-        const nextQty = item.quantity - 1;
-        return nextQty > 0 ? { ...item, quantity: nextQty } : item;
-      }
-      return item;
-    }));
+    cartService.decreaseQty(id);
   };
 
   const handleRemoveItem = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.product.id !== id));
+    cartService.removeFromCart(id);
   };
 
   // Cálculos dinámicos

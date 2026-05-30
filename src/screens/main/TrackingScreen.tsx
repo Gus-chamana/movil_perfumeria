@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -13,6 +13,9 @@ import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../services/AuthContext';
+import { apiClient } from '../../services/api';
+import { ActivityIndicator } from 'react-native';
 
 type TrackingScreenRouteProp = RouteProp<RootStackParamList, 'Tracking'>;
 type TrackingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Tracking'>;
@@ -27,37 +30,73 @@ interface TimelineEvent {
 export default function TrackingScreen() {
   const route = useRoute<TrackingScreenRouteProp>();
   const navigation = useNavigation<TrackingScreenNavigationProp>();
+  const { userToken, userProfile } = useAuth();
   
-  // Capturar el ID del pedido generado o por defecto
   const orderId = route.params?.orderId || 'NE-948271';
 
-  // Eventos de la línea de tiempo vertical de lujo
-  const TIMELINE_EVENTS: TimelineEvent[] = [
-    {
-      title: 'Pedido Confirmado',
-      time: '10:14 AM',
-      description: 'Tu transacción ha sido validada de forma exitosa. Transmitido a bodega central.',
-      status: 'completed',
-    },
-    {
-      title: 'Preparación y Embalaje de Lujo',
-      time: '10:30 AM',
-      description: 'Tu fragancia ha sido sellada y empaquetada con envoltura protectora Noir Essence.',
-      status: 'completed',
-    },
-    {
-      title: 'En Camino a tu Destino',
-      time: '10:45 AM (En Tránsito)',
-      description: 'El motorizado exclusivo ha salido del centro de distribución y va en ruta.',
-      status: 'active',
-    },
-    {
-      title: 'Entrega en Puerta',
-      time: 'Estimado 11:15 AM',
-      description: 'Fragancia entregada en mano propia bajo estrictos protocolos de bioseguridad.',
-      status: 'pending',
-    },
-  ];
+  // Estados reactivos locales para almacenar el tracking en caliente de Supabase
+  const [trackingData, setTrackingData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTracking = async () => {
+      try {
+        setLoading(true);
+        // Llamada al endpoint dinámico de tracking protegido por JWT
+        const data = await apiClient.get(`/orders/${orderId}/tracking`, userToken || undefined);
+        setTrackingData(data);
+      } catch (error) {
+        console.error('[Error de Red en TrackingScreen]:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTracking();
+  }, [orderId]);
+
+  // Formatear la bitácora logística dinámica en base a los datos reales de Supabase
+  const getTimelineEvents = (): TimelineEvent[] => {
+    if (!trackingData || !trackingData.timeline) return [];
+
+    const estados = trackingData.timeline.map((t: any) => t.status);
+    const totalEstados = ['CREADO', 'PREPARANDO', 'EN_RUTA', 'ENTREGADO'];
+    const currentStatus = trackingData.currentStatus;
+
+    return [
+      {
+        title: 'Pedido Confirmado',
+        time: trackingData.timeline.find((t: any) => t.status === 'CREADO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'CREADO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        description: 'Tu transacción ha sido validada de forma exitosa. Transmitido a bodega central.',
+        status: estados.includes('CREADO') ? (currentStatus === 'CREADO' ? 'active' : 'completed') : 'pending',
+      },
+      {
+        title: 'Preparación y Embalaje de Lujo',
+        time: trackingData.timeline.find((t: any) => t.status === 'PREPARANDO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'PREPARANDO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        description: 'Tu fragancia ha sido sellada y empaquetada con envoltura protectora Noir Essence.',
+        status: estados.includes('PREPARANDO') ? (currentStatus === 'PREPARANDO' ? 'active' : 'completed') : 'pending',
+      },
+      {
+        title: 'En Camino a tu Destino',
+        time: trackingData.timeline.find((t: any) => t.status === 'EN_RUTA') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'EN_RUTA').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'En Tránsito',
+        description: 'El motorizado exclusivo ha salido del centro de distribución y va en ruta.',
+        status: estados.includes('EN_RUTA') ? (currentStatus === 'EN_RUTA' ? 'active' : 'completed') : 'pending',
+      },
+      {
+        title: 'Entrega en Puerta',
+        time: trackingData.timeline.find((t: any) => t.status === 'ENTREGADO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'ENTREGADO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : `Estimado ${trackingData.estimatedTime || '30 min'}`,
+        description: 'Fragancia entregada en mano propia bajo estrictos protocolos de bioseguridad.',
+        status: estados.includes('ENTREGADO') ? 'active' : 'pending',
+      },
+    ];
+  };
 
   const handleReturnHome = () => {
     // Regresa a la pestaña principal del Core (HomeScreen)
@@ -74,40 +113,50 @@ export default function TrackingScreen() {
         <Text style={styles.orderIdText}>{orderId}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* 1. Datos del Despachador / Motorizado (Tarjeta Flotante Premium) */}
-        <View style={styles.dispatcherCard}>
-          <View style={styles.dispatcherInfoRow}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarCircleText}>MS</Text>
-            </View>
-            <View style={styles.dispatcherMeta}>
-              <Text style={styles.driverName}>Mateo Silva</Text>
-              <Text style={styles.vehicleType}>Repartidor Noir Conciérge</Text>
-            </View>
-            <View style={styles.plateBadge}>
-              <Text style={styles.plateText}>NG-5830</Text>
-            </View>
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
-          <Text style={styles.deliveryAddress}>
-            Av. Javier Prado Este 1024, Dpto 402, San Borja, Lima
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ marginTop: theme.spacing.md, color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily.body, fontSize: 13, letterSpacing: 1.5 }}>
+            LOCALIZANDO MOTORIZADO...
           </Text>
         </View>
-
-        {/* 2. Línea de Tiempo Vertical Interactiva */}
-        <View style={styles.timelineCard}>
-          <Text style={styles.timelineTitle}>Bitácora del Envío</Text>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          <View style={styles.timelineWrapper}>
-            {TIMELINE_EVENTS.map((event, index) => {
-              const isLast = index === TIMELINE_EVENTS.length - 1;
-              const isCompleted = event.status === 'completed';
-              const isActive = event.status === 'active';
+          {/* 1. Datos del Despachador / Motorizado (Tarjeta Flotante Premium) */}
+          <View style={styles.dispatcherCard}>
+            <View style={styles.dispatcherInfoRow}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarCircleText}>
+                  {trackingData?.courier ? trackingData.courier.name.split(' ').map((n: string) => n[0]).join('') : 'MS'}
+                </Text>
+              </View>
+              <View style={styles.dispatcherMeta}>
+                <Text style={styles.driverName}>{trackingData?.courier?.name || 'Mateo Silva'}</Text>
+                <Text style={styles.vehicleType}>Repartidor Noir Concierge</Text>
+              </View>
+              <View style={styles.plateBadge}>
+                <Text style={styles.plateText}>{trackingData?.courier?.plate || 'NG-5830'}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
+            <Text style={styles.deliveryAddress}>
+              {trackingData?.ordenes?.direccion_envio || userProfile?.address || 'Av. Javier Prado Este 1024, Dpto 402, San Borja, Lima'}
+            </Text>
+          </View>
+
+          {/* 2. Línea de Tiempo Vertical Interactiva */}
+          <View style={styles.timelineCard}>
+            <Text style={styles.timelineTitle}>Bitácora del Envío</Text>
+            
+            <View style={styles.timelineWrapper}>
+              {getTimelineEvents().map((event, index, arr) => {
+                const isLast = index === arr.length - 1;
+                const isCompleted = event.status === 'completed';
+                const isActive = event.status === 'active';
               
               return (
                 <View key={index} style={styles.timelineRow}>
@@ -166,6 +215,7 @@ export default function TrackingScreen() {
         />
 
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

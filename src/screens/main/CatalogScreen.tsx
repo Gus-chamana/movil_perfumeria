@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,12 +8,15 @@ import {
   TouchableOpacity, 
   Animated,
   Dimensions,
-  StatusBar
+  StatusBar,
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { ProductCard } from '../../components/ProductCard';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
+import { Product } from '../../assets/productsData';
+import { apiClient } from '../../services/api';
+import { cartService } from '../../services/cartService';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +33,10 @@ const SIZE_OPTIONS = ['Todos', '50ml', '100ml', '200ml'];
 const CONCENTRATION_OPTIONS = ['Todos', 'Eau de Parfum', 'Parfum', 'Eau de Toilette'];
 
 export default function CatalogScreen() {
+  // Estados del Catálogo y Carga
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   // Estados de Filtros
   const [selectedGender, setSelectedGender] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('Todos');
@@ -38,11 +45,32 @@ export default function CatalogScreen() {
   // Estado para expandir/colapsar panel de filtros
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  // Filtrado reactivo en tiempo real
-  const filteredProducts = PRODUCTS_MOCK.filter((product) => {
+  // Cargar catálogo relacional de perfumes
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        setLoading(true);
+        const data = await apiClient.get('/products');
+        setProducts(data);
+      } catch (error) {
+        console.error('[Error de Red en CatalogScreen]:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCatalog();
+  }, []);
+
+  // Filtrado reactivo en tiempo real adaptado a variantes relacionales
+  const filteredProducts = products.filter((product) => {
     const matchGender = selectedGender === 'all' || product.gender === selectedGender;
-    const matchSize = selectedSize === 'Todos' || product.size === selectedSize;
-    const matchConcentration = selectedConcentration === 'Todos' || product.concentration === selectedConcentration;
+    
+    // Mapear tamaño sobre el arreglo de variantes del producto
+    const matchSize = selectedSize === 'Todos' || (product.variants && product.variants.some((v: any) => v.size === selectedSize));
+    
+    // Mapear concentración sobre las variantes
+    const matchConcentration = selectedConcentration === 'Todos' || (product.variants && product.variants.some((v: any) => v.concentration === selectedConcentration));
+    
     return matchGender && matchSize && matchConcentration;
   });
 
@@ -176,7 +204,14 @@ export default function CatalogScreen() {
       </View>
 
       {/* 3. Grilla de Productos de Doble Columna */}
-      {filteredProducts.length > 0 ? (
+      {loading ? (
+        <View style={{ flex: 0.8, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ marginTop: theme.spacing.md, color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily.body, fontSize: 13, letterSpacing: 1.5 }}>
+            DECODIFICANDO ESENCIAS...
+          </Text>
+        </View>
+      ) : filteredProducts.length > 0 ? (
         <FlatList
           data={filteredProducts}
           keyExtractor={(item) => item.id}
@@ -193,6 +228,7 @@ export default function CatalogScreen() {
               imageUrl={item.imageUrl}
               isNew={item.isNew}
               onPress={() => console.log(`Detalle: ${item.name}`)}
+              onAddToCartPress={() => cartService.addToCart(item)}
             />
           )}
         />

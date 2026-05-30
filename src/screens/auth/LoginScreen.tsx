@@ -15,11 +15,13 @@ import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../services/AuthContext';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Auth'>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { loginUser } = useAuth();
   
   // Estados de Formulario
   const [email, setEmail] = useState('');
@@ -30,8 +32,8 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // Validación básica y simulación de Login
-  const handleLogin = () => {
+  // Validación básica e inicio de sesión real
+  const handleLogin = async () => {
     let valid = true;
     setEmailError('');
     setPasswordError('');
@@ -56,13 +58,16 @@ export default function LoginScreen() {
 
     if (!valid) return;
 
-    // Simular llamada a API
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      // Redirigir al flujo principal de la App
+    try {
+      await loginUser(email, password);
+      // Redirigir al flujo principal de la App tras login exitoso
       navigation.replace('Main');
-    }, 1500);
+    } catch (error: any) {
+      setPasswordError(error.message || 'Correo o contraseña incorrectos.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoToRegister = () => {

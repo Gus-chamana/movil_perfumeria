@@ -21,6 +21,7 @@ export interface ProductCardProps {
   isFavoriteInitial?: boolean;
   onPress?: () => void;
   onFavoritePress?: (isFavorite: boolean) => void;
+  onAddToCartPress?: () => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -42,9 +43,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isFavoriteInitial = false,
   onPress,
   onFavoritePress,
+  onAddToCartPress,
 }) => {
   const [isFavorite, setIsFavorite] = useState(isFavoriteInitial);
   const heartScale = useRef(new Animated.Value(1)).current;
+
+  // Manejo de Añadir al Carrito Directo (+) evitando propagación de clic
+  const handleAddToCart = (e: any) => {
+    e.stopPropagation();
+    if (onAddToCartPress) {
+      onAddToCartPress();
+    }
+  };
 
   // Formateador de Moneda en Soles Peruanos o Dólares (Estilo Noir: S/. XXX.XX)
   const formatPrice = (amount: number) => {
@@ -117,6 +127,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           >
             {isFavorite ? '♥' : '♡'}
           </Animated.Text>
+        </TouchableOpacity>
+
+        {/* Botón para Añadir al Carrito Directamente (+) */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleAddToCart}
+          style={styles.addToCartButton}
+        >
+          <Text style={styles.plusIcon}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -242,5 +261,29 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary, // Blanco para precio o dorado
     fontWeight: theme.typography.weights.bold,
     marginTop: theme.spacing.xs,
+  },
+  addToCartButton: {
+    position: 'absolute',
+    right: theme.spacing.sm,
+    bottom: theme.spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.round,
+    backgroundColor: theme.colors.primary, // Oro Premium
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  plusIcon: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.background, // Contraste oscuro
+    lineHeight: Platform.OS === 'ios' ? 22 : 18,
+    textAlign: 'center',
   },
 });
