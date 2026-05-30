@@ -8,8 +8,19 @@ export const API_BASE_URL = 'http://192.168.18.13:3000/api';
  * al modelo simplificado que utiliza el frontend.
  */
 export const mapAPIProductToFrontend = (apiProduct: any): Product => {
-  // Tomamos la primera variante disponible para extraer el precio e imagen
+  // Buscamos cualquier variante que tenga imagen, priorizando las que usan el bucket correcto 'Productos'
+  const variantWithImage = apiProduct.variantes?.find((v: any) => v.imagenUrl && v.imagenUrl.includes('Productos/'))
+    || apiProduct.variantes?.find((v: any) => v.imagenUrl)
+    || apiProduct.variantes?.[0]
+    || {};
+
   const defaultVariant = apiProduct.variantes?.[0] || {};
+
+  // Si la URL viene con el bucket viejo 'perfumes', la corregimos automáticamente a 'Productos'
+  let finalImageUrl = variantWithImage.imagenUrl || undefined;
+  if (finalImageUrl && finalImageUrl.includes('/public/perfumes/')) {
+    finalImageUrl = finalImageUrl.replace('/public/perfumes/', '/public/Productos/');
+  }
 
   return {
     id: apiProduct.id,
@@ -17,7 +28,7 @@ export const mapAPIProductToFrontend = (apiProduct: any): Product => {
     brand: apiProduct.marca || 'Noir Essence',
     name: apiProduct.nombre || '',
     price: defaultVariant.precio ? parseFloat(defaultVariant.precio.toString()) : 0,
-    imageUrl: defaultVariant.imagenUrl || undefined,
+    imageUrl: finalImageUrl,
     category: apiProduct.categoria || 'Amaderados',
     gender: apiProduct.gender || 'unisex',
     size: defaultVariant.size || '100ml',
