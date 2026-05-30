@@ -1,8 +1,8 @@
 // Configuración única de API y cliente de red para conectar la app móvil con el backend de Express
 
-// ⚠️ REEMPLAZA ESTA IP por la Dirección IPv4 real de tu computadora (la que te dio ipconfig)
-// Esto permite que el celular físico o emulador se conecte de inmediato por tu red Wi-Fi
-export const API_URL = 'movilperfumeria-production.up.railway.app';
+// ⚠️ REEMPLAZA ESTA IP por tu URL de Railway de producción
+// Esto permite que el celular físico o emulador se conecte de inmediato desde cualquier lugar
+export const API_URL = 'https://movilperfumeria-production.up.railway.app/api';
 
 // Cliente de Peticiones HTTP genérico usando fetch nativo de JavaScript
 export const apiClient = {
