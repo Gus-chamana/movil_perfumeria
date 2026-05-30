@@ -75,7 +75,7 @@ async function main() {
       sku: 'DIOR-SAUV-100-EDP',
       precio: 450.00,
       stock: 15,
-      imagenUrl: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -92,7 +92,7 @@ async function main() {
       sku: 'DIOR-SAUV-200-EDT',
       precio: 620.00,
       stock: 8,
-      imagenUrl: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -121,7 +121,7 @@ async function main() {
       sku: 'CHANEL-N5-50-PARF',
       precio: 380.00,
       stock: 10,
-      imagenUrl: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -138,7 +138,7 @@ async function main() {
       sku: 'CHANEL-N5-100-EDP',
       precio: 550.00,
       stock: 12,
-      imagenUrl: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -167,7 +167,7 @@ async function main() {
       sku: 'CREED-AV-100-EDP',
       precio: 950.00,
       stock: 6,
-      imagenUrl: 'https://images.unsplash.com/photo-1523293182086-7651a899d37f?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/aventus.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -196,7 +196,7 @@ async function main() {
       sku: 'CHANEL-BLEU-100-EDP',
       precio: 490.00,
       stock: 20,
-      imagenUrl: 'https://images.unsplash.com/photo-1588405748373-122b2321bc31?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/bleu.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -225,7 +225,7 @@ async function main() {
       sku: 'TF-BLORQ-50-EDP',
       precio: 420.00,
       stock: 4,
-      imagenUrl: 'https://images.unsplash.com/photo-1616949755610-8c9bbc08f138?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({
@@ -242,7 +242,7 @@ async function main() {
       sku: 'TF-BLORQ-100-EDP',
       precio: 610.00,
       stock: 7,
-      imagenUrl: 'https://images.unsplash.com/photo-1616949755610-8c9bbc08f138?auto=format&fit=crop&w=400&q=80'
+      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg'
     }
   });
   await prisma.varianteAtributo.createMany({

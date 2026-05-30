@@ -1,11 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model Usuario {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  password        String           @db.VarChar(255)
+  rol             Role             @default(CLIENTE)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  carrito         Carrito?
+  datosPersonales DatosPersonales?
+  direcciones     Direccion[]
+  favoritos       Favorito[]
+  motorizado      Motorizado?
+  ordenes         Orden[]
+
+  @@map("usuarios")
+}
+
+model DatosPersonales {
+  id              String   @id @default(uuid())
+  usuarioId       String   @unique @map("usuario_id")
+  nombre          String
+  apellidoPaterno String   @map("apellido_paterno")
+  apellidoMaterno String?  @map("apellido_materno")
+  dni             String   @unique
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("datos_personales")
+}
+
+model Direccion {
+  id           String   @id @default(uuid())
+  usuarioId    String   @map("usuario_id")
+  direccion    String
+  departamento String
+  provincia    String
+  distrito     String
+  referencia   String?
+  esPrincipal  Boolean  @default(false) @map("es_principal")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("direcciones")
+}
+
+model Producto {
+  id          String             @id @default(uuid())
+  nombre      String
+  marca       String
+  descripcion String
+  esNuevo     Boolean            @default(false) @map("es_nuevo")
+  categoria   String
+  gender      String             @default("unisex")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  favoritos   Favorito[]
+  variantes   ProductoVariante[]
+
+  @@map("productos")
+}
+
+model ProductoVariante {
+  id         String             @id @default(uuid())
+  productoId String             @map("producto_id")
+  sku        String             @unique
+  precio     Decimal            @db.Decimal(10, 2)
+  stock      Int
+  imagenUrl  String?            @map("imagen_url")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  cartItems  CarritoItem[]
+  orderItems DetalleOrden[]
+  producto   Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  atributos  VarianteAtributo[]
+
+  @@map("producto_variantes")
+}
+
+model Atributo {
+  id      String          @id @default(uuid())
+  nombre  String          @unique
+  valores AtributoValor[]
+
+  @@map("atributos")
+}
+
+model AtributoValor {
+  id         String             @id @default(uuid())
+  atributoId String             @map("atributo_id")
+  valor      String
+  atributo   Atributo           @relation(fields: [atributoId], references: [id], onDelete: Cascade)
+  variantes  VarianteAtributo[]
+
+  @@unique([atributoId, valor])
+  @@map("atributo_valores")
+}
+
+model VarianteAtributo {
+  varianteId String           @map("producto_variante_id")
+  valorId    String           @map("atributo_valor_id")
+  valor      AtributoValor    @relation(fields: [valorId], references: [id], onDelete: Cascade)
+  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@id([varianteId, valorId])
+  @@map("variante_atributos")
+}
+
+model Carrito {
+  id        String        @id @default(uuid())
+  usuarioId String        @unique @map("usuario_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  usuario   Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  items     CarritoItem[]
+
+  @@map("carrito")
+}
+
+model CarritoItem {
+  id         String           @id @default(uuid())
+  carritoId  String           @map("carrito_id")
+  varianteId String           @map("producto_variante_id")
+  cantidad   Int              @default(1)
+  carrito    Carrito          @relation(fields: [carritoId], references: [id], onDelete: Cascade)
+  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@unique([carritoId, varianteId])
+  @@map("carrito_items")
+}
+
+model Favorito {
+  usuarioId  String   @map("usuario_id")
+  productoId String   @map("producto_id")
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, productoId])
+  @@map("favoritos")
+}
+
+model Orden {
+  id             String         @id @default(uuid())
+  usuarioId      String         @map("usuario_id")
+  estado         OrderStatus    @default(CREADO)
+  precioTotal    Decimal        @map("precio_total") @db.Decimal(10, 2)
+  direccionEnvio String         @map("direccion_envio")
+  receptorNombre String         @map("receptor_nombre")
+  receptorDni    String         @map("receptor_dni")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  items          DetalleOrden[]
+  envio          Envio?
+  usuario        Usuario        @relation(fields: [usuarioId], references: [id])
+  pago           Pago?
+
+  @@map("ordenes")
+}
+
+model DetalleOrden {
+  id         String           @id @default(uuid())
+  ordenId    String           @map("orden_id")
+  varianteId String           @map("producto_variante_id")
+  cantidad   Int
+  precioUnit Decimal          @map("precio_unitario") @db.Decimal(10, 2)
+  orden      Orden            @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  variante   ProductoVariante @relation(fields: [varianteId], references: [id])
+
+  @@map("detalle_orden")
+}
+
+model Pago {
+  id            String        @id @default(uuid())
+  ordenId       String        @unique @map("orden_id")
+  metodoPago    PaymentMethod @map("metodo_pago")
+  monto         Decimal       @db.Decimal(10, 2)
+  estado        PaymentStatus @default(PENDIENTE)
+  fechaPago     DateTime      @default(now()) @map("fecha_pago")
+  transaccionId String?       @map("transaccion_id")
+  orden         Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+
+  @@map("pagos")
+}
+
+model Envio {
+  id             String        @id @default(uuid())
+  ordenId        String        @unique @map("orden_id")
+  motorizadoId   String?       @map("motorizado_id")
+  numeroTracking String        @unique @map("numero_tracking")
+  estadoActual   OrderStatus   @default(CREADO) @map("estado_actual")
+  tiempoEstimado String?       @map("tiempo_estimado")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  estados        EnvioEstado[]
+  motorizado     Motorizado?   @relation(fields: [motorizadoId], references: [id])
+  orden          Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+
+  @@map("envios")
+}
+
+model EnvioEstado {
+  id      String      @id @default(uuid())
+  envioId String      @map("envio_id")
+  estado  OrderStatus
+  fecha   DateTime    @default(now())
+  envio   Envio       @relation(fields: [envioId], references: [id], onDelete: Cascade)
+
+  @@map("envio_estados")
+}
+
+model Motorizado {
+  id            String   @id @map("id")
+  nombre        String
+  telefono      String
+  placaVehiculo String   @map("placa_vehiculo")
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  envios        Envio[]
+  usuario       Usuario  @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("motorizados")
 }
 
 enum Role {
@@ -31,229 +256,4 @@ enum PaymentStatus {
   PENDIENTE
   APROBADO
   RECHAZADO
-}
-
-model Usuario {
-  id             String          @id @default(uuid())
-  email          String          @unique
-  password       String          @db.VarChar(255)
-  rol            Role            @default(CLIENTE)
-  datosPersonales DatosPersonales?
-  direcciones    Direccion[]
-  carrito        Carrito?
-  favoritos      Favorito[]
-  ordenes        Orden[]
-  motorizado     Motorizado?
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-
-  @@map("usuarios")
-}
-
-model DatosPersonales {
-  id              String   @id @default(uuid())
-  usuarioId       String   @unique @map("usuario_id")
-  usuario         Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  nombre          String
-  apellidoPaterno String   @map("apellido_paterno")
-  apellidoMaterno String?  @map("apellido_materno")
-  dni             String   @unique
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  @@map("datos_personales")
-}
-
-model Direccion {
-  id           String   @id @default(uuid())
-  usuarioId    String   @map("usuario_id")
-  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  direccion    String
-  departamento String
-  provincia    String
-  distrito     String
-  referencia   String?
-  esPrincipal  Boolean  @default(false) @map("es_principal")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@map("direcciones")
-}
-
-model Producto {
-  id          String             @id @default(uuid())
-  nombre      String
-  marca       String
-  descripcion String
-  esNuevo     Boolean            @default(false) @map("es_nuevo")
-  categoria   String
-  gender      String             @default("unisex") // e.g. "men", "women", "unisex"
-  variantes   ProductoVariante[]
-  favoritos   Favorito[]
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-
-  @@map("productos")
-}
-
-model ProductoVariante {
-  id         String             @id @default(uuid())
-  productoId String             @map("producto_id")
-  producto   Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  sku        String             @unique
-  precio     Decimal            @db.Decimal(10, 2)
-  stock      Int
-  imagenUrl  String?            @map("imagen_url")
-  atributos  VarianteAtributo[]
-  cartItems  CarritoItem[]
-  orderItems DetalleOrden[]
-  createdAt  DateTime           @default(now()) @map("created_at")
-  updatedAt  DateTime           @updatedAt @map("updated_at")
-
-  @@map("producto_variantes")
-}
-
-model Atributo {
-  id      String          @id @default(uuid())
-  nombre  String          @unique // e.g. "Tamaño", "Concentración"
-  valores AtributoValor[]
-
-  @@map("atributos")
-}
-
-model AtributoValor {
-  id         String             @id @default(uuid())
-  atributoId String             @map("atributo_id")
-  atributo   Atributo           @relation(fields: [atributoId], references: [id], onDelete: Cascade)
-  valor      String             // e.g. "100ml", "Eau de Parfum"
-  variantes  VarianteAtributo[]
-
-  @@unique([atributoId, valor])
-  @@map("atributo_valores")
-}
-
-model VarianteAtributo {
-  varianteId String           @map("producto_variante_id")
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
-  valorId    String           @map("atributo_valor_id")
-  valor      AtributoValor    @relation(fields: [valorId], references: [id], onDelete: Cascade)
-
-  @@id([varianteId, valorId])
-  @@map("variante_atributos")
-}
-
-model Carrito {
-  id        String        @id @default(uuid())
-  usuarioId String        @unique @map("usuario_id")
-  usuario   Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  items     CarritoItem[]
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
-
-  @@map("carrito")
-}
-
-model CarritoItem {
-  id         String           @id @default(uuid())
-  carritoId  String           @map("carrito_id")
-  carrito    Carrito          @relation(fields: [carritoId], references: [id], onDelete: Cascade)
-  varianteId String           @map("producto_variante_id")
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
-  cantidad   Int              @default(1)
-
-  @@unique([carritoId, varianteId])
-  @@map("carrito_items")
-}
-
-model Favorito {
-  usuarioId  String   @map("usuario_id")
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  productoId String   @map("producto_id")
-  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
-
-  @@id([usuarioId, productoId])
-  @@map("favoritos")
-}
-
-model Orden {
-  id             String         @id @default(uuid())
-  usuarioId      String         @map("usuario_id")
-  usuario        Usuario        @relation(fields: [usuarioId], references: [id])
-  estado         OrderStatus    @default(CREADO)
-  precioTotal    Decimal        @map("precio_total") @db.Decimal(10, 2)
-  direccionEnvio String         @map("direccion_envio")
-  receptorNombre String         @map("receptor_nombre")
-  receptorDni    String         @map("receptor_dni")
-  items          DetalleOrden[]
-  pago           Pago?
-  envio          Envio?
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-
-  @@map("ordenes")
-}
-
-model DetalleOrden {
-  id         String           @id @default(uuid())
-  ordenId    String           @map("orden_id")
-  orden      Orden            @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  varianteId String           @map("producto_variante_id")
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id])
-  cantidad   Int
-  precioUnit Decimal          @map("precio_unitario") @db.Decimal(10, 2)
-
-  @@map("detalle_orden")
-}
-
-model Pago {
-  id            String        @id @default(uuid())
-  ordenId       String        @unique @map("orden_id")
-  orden         Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  metodoPago    PaymentMethod @map("metodo_pago")
-  monto         Decimal       @db.Decimal(10, 2)
-  estado        PaymentStatus @default(PENDIENTE)
-  fechaPago     DateTime      @default(now()) @map("fecha_pago")
-  transaccionId String?       @map("transaccion_id")
-
-  @@map("pagos")
-}
-
-model Envio {
-  id             String        @id @default(uuid())
-  ordenId        String        @unique @map("orden_id")
-  orden          Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  motorizadoId   String?       @map("motorizado_id")
-  motorizado     Motorizado?   @relation(fields: [motorizadoId], references: [id])
-  numeroTracking String        @unique @map("numero_tracking")
-  estadoActual   OrderStatus   @default(CREADO) @map("estado_actual")
-  tiempoEstimado String?       @map("tiempo_estimado")
-  estados        EnvioEstado[]
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-
-  @@map("envios")
-}
-
-model EnvioEstado {
-  id        String      @id @default(uuid())
-  envioId   String      @map("envio_id")
-  envio     Envio       @relation(fields: [envioId], references: [id], onDelete: Cascade)
-  estado    OrderStatus
-  fecha     DateTime    @default(now())
-
-  @@map("envio_estados")
-}
-
-model Motorizado {
-  id             String   @id @map("id") // Corresponde al Usuario.id
-  usuario        Usuario  @relation(fields: [id], references: [id], onDelete: Cascade)
-  nombre         String
-  telefono       String
-  placaVehiculo  String   @map("placa_vehiculo")
-  activo         Boolean  @default(true)
-  envios         Envio[]
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  @@map("motorizados")
 }
