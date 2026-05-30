@@ -6,11 +6,11 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`
   ======================================================
   ✨ Servidor Noir Essence iniciado correctamente ✨
-  🚀 Escuchando en el puerto: http://localhost:${PORT}
+  🚀 Escuchando en el puerto: http://0.0.0.0:${PORT}
   🌍 Entorno: ${process.env.NODE_ENV || 'development'}
   ======================================================
   `);
