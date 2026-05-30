@@ -4,337 +4,376 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Iniciando proceso de inicialización (seed)...');
+  console.log('🌱 Iniciando la siembra relacional robusta en Supabase...');
 
-  // Limpiar base de datos
-  await prisma.$executeRawUnsafe(`TRUNCATE TABLE "usuarios", "datos_personales", "direcciones", "productos", "producto_variantes", "atributos", "atributo_valores", "variante_atributos", "carrito", "carrito_items", "favoritos", "ordenes", "detalle_orden", "pagos", "envios", "envio_estados", "motorizados" CASCADE;`);
-  console.log('Base de datos limpiada.');
+  // 1. Asegurar Atributos
+  console.log('📦 Asegurando Atributos de Variantes...');
+  let attrTamanioId = 'attr-tamanio';
+  let attrConcentracionId = 'attr-concentracion';
 
-  // 1. Crear Atributos y Valores
-  console.log('Creando atributos (Tamaño, Concentración, Género)...');
-  const attrTamaño = await prisma.atributo.create({
-    data: { nombre: 'Tamaño' }
-  });
+  try {
+    const t = await prisma.atributo.upsert({
+      where: { nombre: 'Tamaño' },
+      update: {},
+      create: { id: 'attr-tamanio', nombre: 'Tamaño' }
+    });
+    attrTamanioId = t.id;
+    console.log(`✔️ Atributo 'Tamaño' listo (ID: ${attrTamanioId})`);
+  } catch (error) {
+    const t = await prisma.atributo.findFirst({ where: { nombre: { equals: 'Tamaño', mode: 'insensitive' } } });
+    if (t) attrTamanioId = t.id;
+    console.log(`✔️ Reutilizando Atributo 'Tamaño' existente (ID: ${attrTamanioId})`);
+  }
 
-  const val50ml = await prisma.atributoValor.create({
-    data: { atributoId: attrTamaño.id, valor: '50ml' }
-  });
-  const val100ml = await prisma.atributoValor.create({
-    data: { atributoId: attrTamaño.id, valor: '100ml' }
-  });
-  const val200ml = await prisma.atributoValor.create({
-    data: { atributoId: attrTamaño.id, valor: '200ml' }
-  });
+  try {
+    const c = await prisma.atributo.upsert({
+      where: { nombre: 'Concentración' },
+      update: {},
+      create: { id: 'attr-concentracion', nombre: 'Concentración' }
+    });
+    attrConcentracionId = c.id;
+    console.log(`✔️ Atributo 'Concentración' listo (ID: ${attrConcentracionId})`);
+  } catch (error) {
+    const c = await prisma.atributo.findFirst({ where: { nombre: { equals: 'Concentración', mode: 'insensitive' } } });
+    if (c) attrConcentracionId = c.id;
+    console.log(`✔️ Reutilizando Atributo 'Concentración' existente (ID: ${attrConcentracionId})`);
+  }
 
-  const attrConcentración = await prisma.atributo.create({
-    data: { nombre: 'Concentración' }
-  });
+  // 2. Asegurar Atributo Valores
+  console.log('📦 Asegurando Valores de Atributos...');
+  const valoresDeseados = [
+    { id: 'val-50ml', atributoId: attrTamanioId, valor: '50ml' },
+    { id: 'val-100ml', atributoId: attrTamanioId, valor: '100ml' },
+    { id: 'val-200ml', atributoId: attrTamanioId, valor: '200ml' },
+    { id: 'val-edt', atributoId: attrConcentracionId, valor: 'Eau de Toilette' },
+    { id: 'val-edp', atributoId: attrConcentracionId, valor: 'Eau de Parfum' },
+    { id: 'val-parfum', atributoId: attrConcentracionId, valor: 'Parfum' },
+  ];
 
-  const valEDP = await prisma.atributoValor.create({
-    data: { atributoId: attrConcentración.id, valor: 'Eau de Parfum' }
-  });
-  const valEDT = await prisma.atributoValor.create({
-    data: { atributoId: attrConcentración.id, valor: 'Eau de Toilette' }
-  });
-  const valParfum = await prisma.atributoValor.create({
-    data: { atributoId: attrConcentración.id, valor: 'Parfum' }
-  });
+  const mapaValoresIds: Record<string, string> = {};
 
-  const attrGénero = await prisma.atributo.create({
-    data: { nombre: 'Género' }
-  });
+  for (const item of valoresDeseados) {
+    let valorId = item.id;
+    try {
+      const v = await prisma.atributoValor.upsert({
+        where: { id: item.id },
+        update: {},
+        create: { id: item.id, atributoId: item.atributoId, valor: item.valor }
+      });
+      valorId = v.id;
+    } catch (e) {
+      const v = await prisma.atributoValor.findFirst({
+        where: {
+          atributoId: item.atributoId,
+          valor: { equals: item.valor, mode: 'insensitive' }
+        }
+      });
+      if (v) valorId = v.id;
+    }
+    mapaValoresIds[item.valor] = valorId;
+    console.log(`   🔹 Valor '${item.valor}' asegurado con ID: ${valorId}`);
+  }
 
-  const valHombre = await prisma.atributoValor.create({
-    data: { atributoId: attrGénero.id, valor: 'Hombre' }
-  });
-  const valMujer = await prisma.atributoValor.create({
-    data: { atributoId: attrGénero.id, valor: 'Mujer' }
-  });
-  const valUnisex = await prisma.atributoValor.create({
-    data: { atributoId: attrGénero.id, valor: 'Unisex' }
-  });
+  // 3. Crear Productos de Lujo (Noir Essence) usando UPSERT para evitar pérdidas destructivas
+  console.log('📦 Población y actualización del Catálogo de Perfumes...');
 
-  // 2. Crear Productos y sus Variantes
-  console.log('Creando catálogo de fragancias de lujo...');
-  
-  // Dior Sauvage
-  const sauvage = await prisma.producto.create({
-    data: {
+  const perfumes = [
+    {
+      id: 'prod-sauvage',
       nombre: 'Sauvage',
       marca: 'Dior',
       descripcion: 'Una composición rotundamente fresca, dictada por un nombre que suena como un manifiesto. Radialmente fresca, cruda y noble a la vez.',
       esNuevo: false,
       categoria: 'Perfumes',
-      gender: 'men'
-    }
-  });
-
-  const sauvage100 = await prisma.productoVariante.create({
-    data: {
-      productoId: sauvage.id,
-      sku: 'DIOR-SAUV-100-EDP',
-      precio: 450.00,
-      stock: 15,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: sauvage100.id, valorId: val100ml.id },
-      { varianteId: sauvage100.id, valorId: valEDP.id },
-      { varianteId: sauvage100.id, valorId: valHombre.id }
-    ]
-  });
-
-  const sauvage200 = await prisma.productoVariante.create({
-    data: {
-      productoId: sauvage.id,
-      sku: 'DIOR-SAUV-200-EDT',
-      precio: 620.00,
-      stock: 8,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: sauvage200.id, valorId: val200ml.id },
-      { varianteId: sauvage200.id, valorId: valEDT.id },
-      { varianteId: sauvage200.id, valorId: valHombre.id }
-    ]
-  });
-
-  // Chanel N°5
-  const chanel5 = await prisma.producto.create({
-    data: {
+      gender: 'men',
+      variantes: [
+        {
+          id: 'var-sauvage-100ml-edp',
+          sku: 'DIOR-SAUV-100-EDP',
+          precio: 450.00,
+          stock: 15,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg',
+          atributos: ['100ml', 'Eau de Parfum']
+        },
+        {
+          id: 'var-sauvage-200ml-edt',
+          sku: 'DIOR-SAUV-200-EDT',
+          precio: 620.00,
+          stock: 8,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/sauvage.jpg',
+          atributos: ['200ml', 'Eau de Toilette']
+        }
+      ]
+    },
+    {
+      id: 'prod-chanel5',
       nombre: 'N°5',
       marca: 'Chanel',
       descripcion: 'La esencia misma de la feminidad. Un bouquet floral aldehído, sublimado por un frasco icónico con líneas minimalistas.',
       esNuevo: false,
       categoria: 'Perfumes',
-      gender: 'women'
-    }
-  });
-
-  const chanel5_50 = await prisma.productoVariante.create({
-    data: {
-      productoId: chanel5.id,
-      sku: 'CHANEL-N5-50-PARF',
-      precio: 380.00,
-      stock: 10,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: chanel5_50.id, valorId: val50ml.id },
-      { varianteId: chanel5_50.id, valorId: valParfum.id },
-      { varianteId: chanel5_50.id, valorId: valMujer.id }
-    ]
-  });
-
-  const chanel5_100 = await prisma.productoVariante.create({
-    data: {
-      productoId: chanel5.id,
-      sku: 'CHANEL-N5-100-EDP',
-      precio: 550.00,
-      stock: 12,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: chanel5_100.id, valorId: val100ml.id },
-      { varianteId: chanel5_100.id, valorId: valEDP.id },
-      { varianteId: chanel5_100.id, valorId: valMujer.id }
-    ]
-  });
-
-  // Creed Aventus
-  const creed = await prisma.producto.create({
-    data: {
+      gender: 'women',
+      variantes: [
+        {
+          id: 'var-chanel5-50ml-parfum',
+          sku: 'CHANEL-N5-50-PARF',
+          precio: 380.00,
+          stock: 10,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg',
+          atributos: ['50ml', 'Parfum']
+        },
+        {
+          id: 'var-chanel5-100ml-edp',
+          sku: 'CHANEL-N5-100-EDP',
+          precio: 550.00,
+          stock: 12,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/chanel5.jpg',
+          atributos: ['100ml', 'Eau de Parfum']
+        }
+      ]
+    },
+    {
+      id: 'prod-aventus',
       nombre: 'Aventus',
       marca: 'Creed',
       descripcion: 'Celebrando la fuerza, el poder y el éxito, esta fragancia gourmet afrutada y rica es perfecta para el hombre contemporáneo audaz.',
       esNuevo: true,
       categoria: 'Perfumes',
-      gender: 'men'
-    }
-  });
-
-  const creed100 = await prisma.productoVariante.create({
-    data: {
-      productoId: creed.id,
-      sku: 'CREED-AV-100-EDP',
-      precio: 950.00,
-      stock: 6,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/aventus.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: creed100.id, valorId: val100ml.id },
-      { varianteId: creed100.id, valorId: valEDP.id },
-      { varianteId: creed100.id, valorId: valHombre.id }
-    ]
-  });
-
-  // Bleu de Chanel
-  const bleu = await prisma.producto.create({
-    data: {
+      gender: 'men',
+      variantes: [
+        {
+          id: 'var-creed-100ml-edp',
+          sku: 'CREED-AV-100-EDP',
+          precio: 950.00,
+          stock: 6,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/aventus.jpg',
+          atributos: ['100ml', 'Eau de Parfum']
+        }
+      ]
+    },
+    {
+      id: 'prod-bleu',
       nombre: 'Bleu de Chanel',
       marca: 'Chanel',
       descripcion: 'El elogio de la libertad masculina en un acorde aromático amaderado con una estela cautivadora. Un aroma atemporal y sensual.',
       esNuevo: true,
       categoria: 'Perfumes',
-      gender: 'men'
-    }
-  });
-
-  const bleu100 = await prisma.productoVariante.create({
-    data: {
-      productoId: bleu.id,
-      sku: 'CHANEL-BLEU-100-EDP',
-      precio: 490.00,
-      stock: 20,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/bleu.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: bleu100.id, valorId: val100ml.id },
-      { varianteId: bleu100.id, valorId: valEDP.id },
-      { varianteId: bleu100.id, valorId: valHombre.id }
-    ]
-  });
-
-  // Tom Ford Black Orchid
-  const blackOrchid = await prisma.producto.create({
-    data: {
+      gender: 'men',
+      variantes: [
+        {
+          id: 'var-bleu-100ml-edp',
+          sku: 'CHANEL-BLEU-100-EDP',
+          precio: 490.00,
+          stock: 20,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/bleu.jpg',
+          atributos: ['100ml', 'Eau de Parfum']
+        }
+      ]
+    },
+    {
+      id: 'prod-black-orchid',
       nombre: 'Black Orchid',
       marca: 'Tom Ford',
       descripcion: 'Una fragancia lujosa y sensual de acordes oscuros e intrigantes, combinada con una rica poción de orquídeas negras y especias.',
       esNuevo: false,
       categoria: 'Perfumes',
-      gender: 'unisex'
+      gender: 'unisex',
+      variantes: [
+        {
+          id: 'var-tf-blorq-50ml-edp',
+          sku: 'TF-BLORQ-50-EDP',
+          precio: 420.00,
+          stock: 4,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg',
+          atributos: ['50ml', 'Eau de Parfum']
+        },
+        {
+          id: 'var-tf-blorq-100ml-edp',
+          sku: 'TF-BLORQ-100-EDP',
+          precio: 610.00,
+          stock: 7,
+          imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg',
+          atributos: ['100ml', 'Eau de Parfum']
+        }
+      ]
     }
-  });
+  ];
 
-  const blackOrchid50 = await prisma.productoVariante.create({
-    data: {
-      productoId: blackOrchid.id,
-      sku: 'TF-BLORQ-50-EDP',
-      precio: 420.00,
-      stock: 4,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg'
+  for (const item of perfumes) {
+    // Upsert del Producto
+    await prisma.producto.upsert({
+      where: { id: item.id },
+      update: {
+        nombre: item.nombre,
+        marca: item.marca,
+        descripcion: item.descripcion,
+        categoria: item.categoria,
+        gender: item.gender
+      },
+      create: {
+        id: item.id,
+        nombre: item.nombre,
+        marca: item.marca,
+        descripcion: item.descripcion,
+        esNuevo: item.esNuevo,
+        categoria: item.categoria,
+        gender: item.gender
+      }
+    });
+
+    console.log(`   ✔️ Producto base listo: ${item.nombre}`);
+
+    // Crear sus variantes
+    for (const v of item.variantes) {
+      try {
+        const varExistente = await prisma.productoVariante.findUnique({ where: { sku: v.sku } });
+        
+        if (varExistente) {
+          await prisma.productoVariante.update({
+            where: { sku: v.sku },
+            data: {
+              precio: v.precio,
+              stock: v.stock,
+              imagenUrl: v.imagenUrl
+            }
+          });
+          console.log(`      🔹 Variante SKU ${v.sku} actualizada.`);
+        } else {
+          // Crear la variante
+          await prisma.productoVariante.create({
+            data: {
+              id: v.id,
+              productoId: item.id,
+              sku: v.sku,
+              precio: v.precio,
+              stock: v.stock,
+              imagenUrl: v.imagenUrl
+            }
+          });
+          console.log(`      🔹 Variante SKU ${v.sku} creada.`);
+
+          // Asociar atributos a la variante
+          for (const attrNombre of v.atributos) {
+            const attrValId = mapaValoresIds[attrNombre];
+            if (attrValId) {
+              await prisma.varianteAtributo.create({
+                data: {
+                  varianteId: v.id,
+                  valorId: attrValId
+                }
+              });
+            }
+          }
+        }
+      } catch (errVariante) {
+        console.warn(`      ⚠️  Aviso en variante SKU ${v.sku}:`, errVariante instanceof Error ? errVariante.message : errVariante);
+      }
     }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: blackOrchid50.id, valorId: val50ml.id },
-      { varianteId: blackOrchid50.id, valorId: valEDP.id },
-      { varianteId: blackOrchid50.id, valorId: valUnisex.id }
-    ]
-  });
+  }
 
-  const blackOrchid100 = await prisma.productoVariante.create({
-    data: {
-      productoId: blackOrchid.id,
-      sku: 'TF-BLORQ-100-EDP',
-      precio: 610.00,
-      stock: 7,
-      imagenUrl: 'https://ffjnvykvmiugjvwrswkt.supabase.co/storage/v1/object/public/perfumes/black_orchid.jpg'
-    }
-  });
-  await prisma.varianteAtributo.createMany({
-    data: [
-      { varianteId: blackOrchid100.id, valorId: val100ml.id },
-      { varianteId: blackOrchid100.id, valorId: valEDP.id },
-      { varianteId: blackOrchid100.id, valorId: valUnisex.id }
-    ]
-  });
-
-  // 3. Crear Usuarios de Prueba (Cliente, Administrador, Motorizado)
-  console.log('Creando cuentas de usuarios de prueba...');
+  // 4. Crear Usuarios de Prueba (Cliente, Administrador, Motorizado)
+  console.log('📦 Población de usuarios de prueba...');
   const saltRounds = 10;
   const hashPassword = (pw: string) => bcrypt.hashSync(pw, saltRounds);
 
   // Admin
-  await prisma.usuario.create({
-    data: {
-      email: 'admin@noinessence.com',
-      password: hashPassword('admin123'),
-      rol: Role.ADMIN,
-      datosPersonales: {
-        create: {
-          nombre: 'Administrador',
-          apellidoPaterno: 'Noir',
-          apellidoMaterno: 'Essence',
-          dni: '00000000'
+  try {
+    await prisma.usuario.upsert({
+      where: { email: 'admin@noinessence.com' },
+      update: {},
+      create: {
+        email: 'admin@noinessence.com',
+        password: hashPassword('admin123'),
+        rol: Role.ADMIN,
+        datosPersonales: {
+          create: {
+            nombre: 'Administrador',
+            apellidoPaterno: 'Noir',
+            apellidoMaterno: 'Essence',
+            dni: '00000000'
+          }
         }
       }
-    }
-  });
+    });
+    console.log('✔️ Cuenta de Admin asegurada.');
+  } catch (err) {
+    console.log('🔹 Cuenta de Admin ya existía.');
+  }
 
   // Motorizado
-  const motorizadoUser = await prisma.usuario.create({
-    data: {
-      email: 'motorizado@noinessence.com',
-      password: hashPassword('motorizado123'),
-      rol: Role.MOTORIZADO,
-      motorizado: {
-        create: {
-          nombre: 'Juan Carlos Pérez',
-          telefono: '987654321',
-          placaVehiculo: 'MX-4842',
-          activo: true
+  try {
+    await prisma.usuario.upsert({
+      where: { email: 'motorizado@noinessence.com' },
+      update: {},
+      create: {
+        email: 'motorizado@noinessence.com',
+        password: hashPassword('motorizado123'),
+        rol: Role.MOTORIZADO,
+        motorizado: {
+          create: {
+            nombre: 'Juan Carlos Pérez',
+            telefono: '987654321',
+            placaVehiculo: 'MX-4842',
+            activo: true
+          }
         }
       }
-    }
-  });
+    });
+    console.log('✔️ Cuenta de Motorizado asegurada.');
+  } catch (err) {
+    console.log('🔹 Cuenta de Motorizado ya existía.');
+  }
 
   // Cliente de prueba
-  await prisma.usuario.create({
-    data: {
-      email: 'cliente@noinessence.com',
-      password: hashPassword('cliente123'),
-      rol: Role.CLIENTE,
-      datosPersonales: {
-        create: {
-          nombre: 'Carlos',
-          apellidoPaterno: 'Gómez',
-          apellidoMaterno: 'Silva',
-          dni: '73948502'
-        }
-      },
-      direcciones: {
-        create: [
-          {
-            direccion: 'Av. Larco 456, Dpto 402',
-            departamento: 'Lima',
-            provincia: 'Lima',
-            distrito: 'Miraflores',
-            referencia: 'Frente al Parque Salazar',
-            esPrincipal: true
-          },
-          {
-            direccion: 'Calle Las Orquídeas 789',
-            departamento: 'Lima',
-            provincia: 'Lima',
-            distrito: 'San Isidro',
-            referencia: 'A dos cuadras de Rivera Navarrete',
-            esPrincipal: false
+  try {
+    await prisma.usuario.upsert({
+      where: { email: 'cliente@noinessence.com' },
+      update: {},
+      create: {
+        email: 'cliente@noinessence.com',
+        password: hashPassword('cliente123'),
+        rol: Role.CLIENTE,
+        datosPersonales: {
+          create: {
+            nombre: 'Carlos',
+            apellidoPaterno: 'Gómez',
+            apellidoMaterno: 'Silva',
+            dni: '73948502'
           }
-        ]
+        },
+        direcciones: {
+          create: [
+            {
+              direccion: 'Av. Larco 456, Dpto 402',
+              departamento: 'Lima',
+              provincia: 'Lima',
+              distrito: 'Miraflores',
+              referencia: 'Frente al Parque Salazar',
+              esPrincipal: true
+            },
+            {
+              direccion: 'Calle Las Orquídeas 789',
+              departamento: 'Lima',
+              provincia: 'Lima',
+              distrito: 'San Isidro',
+              referencia: 'A dos cuadras de Rivera Navarrete',
+              esPrincipal: false
+            }
+          ]
+        }
       }
-    }
-  });
+    });
+    console.log('✔️ Cuenta de Cliente asegurada.');
+  } catch (err) {
+    console.log('🔹 Cuenta de Cliente ya existía.');
+  }
 
-  console.log('Inicialización completada con éxito.');
+  console.log('🌱 Siembra y actualización de base de datos relacional completada con éxito absoluto.');
 }
 
 main()
   .catch((e) => {
-    console.error('Error durante la inicialización:', e);
+    console.error('❌ Error fatal al realizar la siembra relacional:', e);
     process.exit(1);
   })
   .finally(async () => {
