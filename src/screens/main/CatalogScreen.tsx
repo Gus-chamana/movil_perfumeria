@@ -51,9 +51,15 @@ export default function CatalogScreen() {
       try {
         setLoading(true);
         const data = await apiClient.get('/products');
-        setProducts(data);
+        if (Array.isArray(data)) {
+          setProducts(data);
+        } else {
+          console.error('[Error de Datos en CatalogScreen]: El catálogo no es un arreglo.', data);
+          setProducts([]);
+        }
       } catch (error) {
         console.error('[Error de Red en CatalogScreen]:', error);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -62,7 +68,7 @@ export default function CatalogScreen() {
   }, []);
 
   // Filtrado reactivo en tiempo real adaptado a variantes relacionales
-  const filteredProducts = products.filter((product) => {
+  const filteredProducts = Array.isArray(products) ? products.filter((product) => {
     const matchGender = selectedGender === 'all' || product.gender === selectedGender;
     
     // Mapear tamaño sobre el arreglo de variantes del producto
@@ -72,7 +78,7 @@ export default function CatalogScreen() {
     const matchConcentration = selectedConcentration === 'Todos' || (product.variants && product.variants.some((v: any) => v.concentration === selectedConcentration));
     
     return matchGender && matchSize && matchConcentration;
-  });
+  }) : [];
 
   const handleResetFilters = () => {
     setSelectedGender('all');

@@ -42,9 +42,15 @@ export default function HomeScreen() {
       try {
         setLoading(true);
         const data = await apiClient.get('/products');
-        setProducts(data);
+        if (Array.isArray(data)) {
+          setProducts(data);
+        } else {
+          console.error('[Error de Datos en HomeScreen]: El catálogo no es un arreglo.', data);
+          setProducts([]);
+        }
       } catch (error) {
         console.error('[Error de Red en HomeScreen]:', error);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -54,6 +60,7 @@ export default function HomeScreen() {
 
   // Filtrar productos según la familia olfativa seleccionada
   const getFilteredProducts = () => {
+    if (!Array.isArray(products)) return [];
     if (selectedCategory === 'Todos') {
       return products;
     }
@@ -61,7 +68,7 @@ export default function HomeScreen() {
   };
 
   // Filtrar novedades para el scroll horizontal
-  const newProducts = products.filter(p => p.isNew);
+  const newProducts = Array.isArray(products) ? products.filter(p => p.isNew) : [];
 
   const handleExploreCatalog = () => {
     navigation.navigate('CatalogTab');
