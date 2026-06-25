@@ -8,235 +8,199 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Usuario {
-  id              String           @id @default(uuid())
-  email           String           @unique
-  password        String           @db.VarChar(255)
-  rol             Role             @default(CLIENTE)
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  carrito         Carrito?
-  datosPersonales DatosPersonales?
-  direcciones     Direccion[]
-  favoritos       Favorito[]
-  motorizado      Motorizado?
-  ordenes         Orden[]
+model atributo_valores {
+  id                 String               @id
+  atributo_id        String
+  valor              String
+  atributos          atributos            @relation(fields: [atributo_id], references: [id], onDelete: Cascade)
+  variante_atributos variante_atributos[]
 
-  @@map("usuarios")
+  @@unique([atributo_id, valor])
 }
 
-model DatosPersonales {
-  id              String   @id @default(uuid())
-  usuarioId       String   @unique @map("usuario_id")
-  nombre          String
-  apellidoPaterno String   @map("apellido_paterno")
-  apellidoMaterno String?  @map("apellido_materno")
-  dni             String   @unique
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  usuario         Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@map("datos_personales")
+model atributos {
+  id               String             @id
+  nombre           String             @unique
+  atributo_valores atributo_valores[]
 }
 
-model Direccion {
-  id           String   @id @default(uuid())
-  usuarioId    String   @map("usuario_id")
+model carrito {
+  id            String          @id
+  usuario_id    String          @unique
+  created_at    DateTime        @default(now())
+  updated_at    DateTime
+  usuarios      usuarios        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  carrito_items carrito_items[]
+}
+
+model carrito_items {
+  id                   String             @id
+  carrito_id           String
+  producto_variante_id String
+  cantidad             Int                @default(1)
+  carrito              carrito            @relation(fields: [carrito_id], references: [id], onDelete: Cascade)
+  producto_variantes   producto_variantes @relation(fields: [producto_variante_id], references: [id], onDelete: Cascade)
+
+  @@unique([carrito_id, producto_variante_id])
+}
+
+model datos_personales {
+  id               String   @id
+  usuario_id       String   @unique
+  nombre           String
+  apellido_paterno String
+  apellido_materno String?
+  dni              String   @unique
+  created_at       DateTime @default(now())
+  updated_at       DateTime
+  usuarios         usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+}
+
+model detalle_orden {
+  id                   String             @id
+  orden_id             String
+  producto_variante_id String
+  cantidad             Int
+  precio_unitario      Decimal            @db.Decimal(10, 2)
+  ordenes              ordenes            @relation(fields: [orden_id], references: [id], onDelete: Cascade)
+  producto_variantes   producto_variantes @relation(fields: [producto_variante_id], references: [id])
+}
+
+model direcciones {
+  id           String   @id
+  usuario_id   String
   direccion    String
   departamento String
   provincia    String
   distrito     String
   referencia   String?
-  esPrincipal  Boolean  @default(false) @map("es_principal")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@map("direcciones")
+  es_principal Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime
+  usuarios     usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 }
 
-model Producto {
-  id          String             @id @default(uuid())
-  nombre      String
-  marca       String
-  descripcion String
-  esNuevo     Boolean            @default(false) @map("es_nuevo")
-  categoria   String
-  gender      String             @default("unisex")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  favoritos   Favorito[]
-  variantes   ProductoVariante[]
-
-  @@map("productos")
+model envio_estados {
+  id       String      @id
+  envio_id String
+  estado   OrderStatus
+  fecha    DateTime    @default(now())
+  envios   envios      @relation(fields: [envio_id], references: [id], onDelete: Cascade)
 }
 
-model ProductoVariante {
-  id         String             @id @default(uuid())
-  productoId String             @map("producto_id")
-  sku        String             @unique
-  precio     Decimal            @db.Decimal(10, 2)
-  stock      Int
-  imagenUrl  String?            @map("imagen_url")
-  createdAt  DateTime           @default(now()) @map("created_at")
-  updatedAt  DateTime           @updatedAt @map("updated_at")
-  cartItems  CarritoItem[]
-  orderItems DetalleOrden[]
-  producto   Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  atributos  VarianteAtributo[]
-
-  @@map("producto_variantes")
+model envios {
+  id              String          @id
+  orden_id        String          @unique
+  motorizado_id   String?
+  numero_tracking String          @unique
+  estado_actual   OrderStatus     @default(CREADO)
+  tiempo_estimado String?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime
+  envio_estados   envio_estados[]
+  motorizados     motorizados?    @relation(fields: [motorizado_id], references: [id])
+  ordenes         ordenes         @relation(fields: [orden_id], references: [id], onDelete: Cascade)
 }
 
-model Atributo {
-  id      String          @id @default(uuid())
-  nombre  String          @unique
-  valores AtributoValor[]
+model favoritos {
+  usuario_id  String
+  producto_id String
+  productos   productos @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+  usuarios    usuarios  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
-  @@map("atributos")
+  @@id([usuario_id, producto_id])
 }
 
-model AtributoValor {
-  id         String             @id @default(uuid())
-  atributoId String             @map("atributo_id")
-  valor      String
-  atributo   Atributo           @relation(fields: [atributoId], references: [id], onDelete: Cascade)
-  variantes  VarianteAtributo[]
-
-  @@unique([atributoId, valor])
-  @@map("atributo_valores")
+model motorizados {
+  id             String   @id
+  nombre         String
+  telefono       String
+  placa_vehiculo String
+  activo         Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime
+  envios         envios[]
+  usuarios       usuarios @relation(fields: [id], references: [id], onDelete: Cascade)
 }
 
-model VarianteAtributo {
-  varianteId String           @map("producto_variante_id")
-  valorId    String           @map("atributo_valor_id")
-  valor      AtributoValor    @relation(fields: [valorId], references: [id], onDelete: Cascade)
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
-
-  @@id([varianteId, valorId])
-  @@map("variante_atributos")
+model ordenes {
+  id              String          @id
+  usuario_id      String
+  estado          OrderStatus     @default(CREADO)
+  precio_total    Decimal         @db.Decimal(10, 2)
+  direccion_envio String
+  receptor_nombre String
+  receptor_dni    String
+  created_at      DateTime        @default(now())
+  updated_at      DateTime
+  detalle_orden   detalle_orden[]
+  envios          envios?
+  usuarios        usuarios        @relation(fields: [usuario_id], references: [id])
+  pagos           pagos?
 }
 
-model Carrito {
-  id        String        @id @default(uuid())
-  usuarioId String        @unique @map("usuario_id")
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
-  usuario   Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  items     CarritoItem[]
-
-  @@map("carrito")
+model pagos {
+  id             String        @id
+  orden_id       String        @unique
+  metodo_pago    PaymentMethod
+  monto          Decimal       @db.Decimal(10, 2)
+  estado         PaymentStatus @default(PENDIENTE)
+  fecha_pago     DateTime      @default(now())
+  transaccion_id String?
+  ordenes        ordenes       @relation(fields: [orden_id], references: [id], onDelete: Cascade)
 }
 
-model CarritoItem {
-  id         String           @id @default(uuid())
-  carritoId  String           @map("carrito_id")
-  varianteId String           @map("producto_variante_id")
-  cantidad   Int              @default(1)
-  carrito    Carrito          @relation(fields: [carritoId], references: [id], onDelete: Cascade)
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
-
-  @@unique([carritoId, varianteId])
-  @@map("carrito_items")
+model producto_variantes {
+  id                 String               @id
+  producto_id        String
+  sku                String               @unique
+  precio             Decimal              @db.Decimal(10, 2)
+  stock              Int
+  imagen_url         String?
+  created_at         DateTime             @default(now())
+  updated_at         DateTime
+  carrito_items      carrito_items[]
+  detalle_orden      detalle_orden[]
+  productos          productos            @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+  variante_atributos variante_atributos[]
 }
 
-model Favorito {
-  usuarioId  String   @map("usuario_id")
-  productoId String   @map("producto_id")
-  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@id([usuarioId, productoId])
-  @@map("favoritos")
+model productos {
+  id                 String               @id
+  nombre             String
+  marca              String
+  descripcion        String
+  es_nuevo           Boolean              @default(false)
+  categoria          String
+  gender             String               @default("unisex")
+  created_at         DateTime             @default(now())
+  updated_at         DateTime
+  favoritos          favoritos[]
+  producto_variantes producto_variantes[]
 }
 
-model Orden {
-  id             String         @id @default(uuid())
-  usuarioId      String         @map("usuario_id")
-  estado         OrderStatus    @default(CREADO)
-  precioTotal    Decimal        @map("precio_total") @db.Decimal(10, 2)
-  direccionEnvio String         @map("direccion_envio")
-  receptorNombre String         @map("receptor_nombre")
-  receptorDni    String         @map("receptor_dni")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  items          DetalleOrden[]
-  envio          Envio?
-  usuario        Usuario        @relation(fields: [usuarioId], references: [id])
-  pago           Pago?
-
-  @@map("ordenes")
+model usuarios {
+  id               String            @id
+  email            String            @unique
+  password         String            @db.VarChar(255)
+  rol              Role              @default(CLIENTE)
+  created_at       DateTime          @default(now())
+  updated_at       DateTime
+  carrito          carrito?
+  datos_personales datos_personales?
+  direcciones      direcciones[]
+  favoritos        favoritos[]
+  motorizados      motorizados?
+  ordenes          ordenes[]
 }
 
-model DetalleOrden {
-  id         String           @id @default(uuid())
-  ordenId    String           @map("orden_id")
-  varianteId String           @map("producto_variante_id")
-  cantidad   Int
-  precioUnit Decimal          @map("precio_unitario") @db.Decimal(10, 2)
-  orden      Orden            @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  variante   ProductoVariante @relation(fields: [varianteId], references: [id])
+model variante_atributos {
+  producto_variante_id String
+  atributo_valor_id    String
+  atributo_valores     atributo_valores   @relation(fields: [atributo_valor_id], references: [id], onDelete: Cascade)
+  producto_variantes   producto_variantes @relation(fields: [producto_variante_id], references: [id], onDelete: Cascade)
 
-  @@map("detalle_orden")
-}
-
-model Pago {
-  id            String        @id @default(uuid())
-  ordenId       String        @unique @map("orden_id")
-  metodoPago    PaymentMethod @map("metodo_pago")
-  monto         Decimal       @db.Decimal(10, 2)
-  estado        PaymentStatus @default(PENDIENTE)
-  fechaPago     DateTime      @default(now()) @map("fecha_pago")
-  transaccionId String?       @map("transaccion_id")
-  orden         Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-
-  @@map("pagos")
-}
-
-model Envio {
-  id             String        @id @default(uuid())
-  ordenId        String        @unique @map("orden_id")
-  motorizadoId   String?       @map("motorizado_id")
-  numeroTracking String        @unique @map("numero_tracking")
-  estadoActual   OrderStatus   @default(CREADO) @map("estado_actual")
-  tiempoEstimado String?       @map("tiempo_estimado")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  estados        EnvioEstado[]
-  motorizado     Motorizado?   @relation(fields: [motorizadoId], references: [id])
-  orden          Orden         @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-
-  @@map("envios")
-}
-
-model EnvioEstado {
-  id      String      @id @default(uuid())
-  envioId String      @map("envio_id")
-  estado  OrderStatus
-  fecha   DateTime    @default(now())
-  envio   Envio       @relation(fields: [envioId], references: [id], onDelete: Cascade)
-
-  @@map("envio_estados")
-}
-
-model Motorizado {
-  id            String   @id @map("id")
-  nombre        String
-  telefono      String
-  placaVehiculo String   @map("placa_vehiculo")
-  activo        Boolean  @default(true)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  envios        Envio[]
-  usuario       Usuario  @relation(fields: [id], references: [id], onDelete: Cascade)
-
-  @@map("motorizados")
-}
-
-enum Role {
-  CLIENTE
-  ADMIN
-  MOTORIZADO
+  @@id([producto_variante_id, atributo_valor_id])
 }
 
 enum OrderStatus {
@@ -256,4 +220,10 @@ enum PaymentStatus {
   PENDIENTE
   APROBADO
   RECHAZADO
+}
+
+enum Role {
+  CLIENTE
+  ADMIN
+  MOTORIZADO
 }

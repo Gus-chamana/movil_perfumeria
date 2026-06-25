@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,17 +10,17 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  Alert
+  ActivityIndicator
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { ProductCard } from '../../components/ProductCard';
 import { Product } from '../../assets/productsData';
 import { useNavigation } from '@react-navigation/native';
-import { useCart } from '../../context/CartContext';
-import { useData } from '../../context/DataContext';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../../navigation/navigation';
+import { apiClient } from '../../services/api';
+import { cartService } from '../../services/cartService';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'HomeTab'>;
 
@@ -33,11 +33,34 @@ const CATEGORIES: ('Todos' | 'Amaderados' | 'Orientales' | 'Florales' | 'Cítric
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
-  const { addToCart } = useCart();
-  const { products } = useData();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Cargar catálogo de perfumes en tiempo real desde Supabase mediante Express
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        setLoading(true);
+        const data = await apiClient.get('/products');
+        if (Array.isArray(data)) {
+          setProducts(data);
+        } else {
+          console.error('[Error de Datos en HomeScreen]: El catálogo no es un arreglo.', data);
+          setProducts([]);
+        }
+      } catch (error) {
+        console.error('[Error de Red en HomeScreen]:', error);
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCatalog();
+  }, []);
 
   // Filtrar productos según la familia olfativa seleccionada
   const getFilteredProducts = () => {
+    if (!Array.isArray(products)) return [];
     if (selectedCategory === 'Todos') {
       return products;
     }
@@ -45,22 +68,14 @@ export default function HomeScreen() {
   };
 
   // Filtrar novedades para el scroll horizontal
-  const newProducts = products.filter(p => p.isNew);
+  const newProducts = Array.isArray(products) ? products.filter(p => p.isNew) : [];
 
   const handleExploreCatalog = () => {
-    // Redirigir al tab del catálogo
     navigation.navigate('CatalogTab');
   };
 
   const handleProductPress = (product: Product) => {
-    // En un flujo real, iría al ProductDetailsScreen. 
-    // Por ahora, simulamos o alertamos elegantemente.
     console.log(`Ver detalles del perfume: ${product.name}`);
-  };
-
-  const handleAddToCart = (product: Product) => {
-    addToCart(product);
-    Alert.alert('Noir Essence', `"${product.name}" se añadió a tu bolsa de compras.`);
   };
 
   return (
@@ -78,7 +93,15 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ marginTop: theme.spacing.md, color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily.body, fontSize: 13, letterSpacing: 1.5 }}>
+            DESCARGANDO COLECCIÓN...
+          </Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* 2. Sección Hero Destacada (Estilo Cartelera de Moda) */}
         <View style={styles.heroWrapper}>
@@ -164,7 +187,7 @@ export default function HomeScreen() {
                   imageUrl={item.imageUrl}
                   isNew={item.isNew}
                   onPress={() => handleProductPress(item)}
-                  onAddToCartPress={() => handleAddToCart(item)}
+                  onAddToCartPress={() => cartService.addToCart(item)}
                 />
               )}
             />
@@ -188,13 +211,14 @@ export default function HomeScreen() {
                 imageUrl={product.imageUrl}
                 isNew={product.isNew}
                 onPress={() => handleProductPress(product)}
-                onAddToCartPress={() => handleAddToCart(product)}
+                onAddToCartPress={() => cartService.addToCart(product)}
               />
             ))}
           </View>
         </View>
 
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

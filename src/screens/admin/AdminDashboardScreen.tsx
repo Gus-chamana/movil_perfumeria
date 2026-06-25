@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -6,204 +6,174 @@ import {
   SafeAreaView, 
   ScrollView, 
   TouchableOpacity, 
-  StatusBar, 
-  Dimensions 
+  ActivityIndicator, 
+  StatusBar,
+  Alert
 } from 'react-native';
 import { theme } from '../../theme/theme';
-import { useAuth } from '../../context/AuthContext';
-import { useData, Order } from '../../context/DataContext';
+import { useAuth } from '../../services/AuthContext';
+import { apiClient } from '../../services/api';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
-
-const CHART_HEIGHT = 120;
+interface Stats {
+  totalSales: number;
+  totalOrders: number;
+  totalClients: number;
+  lowStockProducts: number;
+}
 
 export default function AdminDashboardScreen() {
-  const { user, logout } = useAuth();
-  const { orders } = useData();
+  const navigation = useNavigation<any>();
+  const { userToken, logoutUser } = useAuth();
+  
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const handleLogout = () => {
-    logout();
+    Alert.alert(
+      'Cerrar Sesión',
+      '¿Estás seguro de que deseas salir de tu cuenta de Administrador?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Cerrar Sesión', 
+          style: 'destructive',
+          onPress: () => {
+            logoutUser();
+            navigation.navigate('Auth');
+          }
+        }
+      ]
+    );
   };
 
-  // 1. Calcular Ventas Totales
-  const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
-
-  // 2. Pedidos Activos (no ENTREGADO)
-  const activeOrdersCount = orders.filter(o => o.status !== 'ENTREGADO').length;
-
-  // Pedidos por asignar motorizado
-  const pendingAssignmentCount = orders.filter(o => o.status === 'PENDIENTE' && !o.motorizado).length;
-
-  // 3. Despachadores Activos (motorizados únicos con pedidos activos asignados)
-  const activeDeliveries = orders.filter(o => o.status !== 'ENTREGADO' && o.motorizado);
-  const activeMotorizados = Array.from(new Set(activeDeliveries.map(o => o.motorizado as string)));
-  const activeCount = activeMotorizados.length;
-
-  // 4. Ventas semanales dinámicas agrupadas por día de la semana
-  const getDayOfWeek = (dateStr: string) => {
+  const fetchStats = async () => {
     try {
-      const [day, month, year] = dateStr.split('/').map(Number);
-      const date = new Date(year, month - 1, day);
-      const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-      return days[date.getDay()];
-    } catch (e) {
-      return 'Lun';
+      setLoading(true);
+      const data = await apiClient.get('/admin/stats', userToken || undefined);
+      setStats(data);
+    } catch (error) {
+      console.error('[Error al obtener estadísticas]:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const weeklySales = [
-    { day: 'Lun', sales: 0 },
-    { day: 'Mar', sales: 0 },
-    { day: 'Mié', sales: 0 },
-    { day: 'Jue', sales: 0 },
-    { day: 'Vie', sales: 0 },
-    { day: 'Sáb', sales: 0 },
-    { day: 'Dom', sales: 0 },
-  ];
-
-  orders.forEach(order => {
-    const day = getDayOfWeek(order.date);
-    const found = weeklySales.find(s => s.day === day);
-    if (found) {
-      found.sales += order.total;
-    }
-  });
-
-  const maxSale = Math.max(...weeklySales.map(s => s.sales), 1);
-
-  // 5. Historial de Operaciones Dinámico (últimas 5 actividades)
-  const getOrderActivity = (order: Order) => {
-    let desc = '';
-    let amount = `S/. ${order.total.toFixed(2)}`;
-    let time = '';
-
-    if (order.status === 'PENDIENTE') {
-      desc = `Nueva orden: ${order.products}`;
-      time = order.timeline[0]?.time || 'Hace poco';
-    } else if (order.status === 'PREPARANDO') {
-      desc = `Asignado a ${order.motorizado || 'repartidor'}`;
-      amount = order.products.split(',')[0] || order.products;
-      time = order.timeline[1]?.time || 'Hace poco';
-    } else if (order.status === 'EN_RUTA') {
-      desc = `En ruta con ${order.motorizado || 'repartidor'}`;
-      time = order.timeline[2]?.time || 'Hace poco';
-    } else if (order.status === 'ENTREGADO') {
-      desc = `Orden marcada como ENTREGADA`;
-      time = order.timeline[3]?.time || 'Hace poco';
-    }
-
-    return {
-      id: order.id,
-      orderId: order.id,
-      desc,
-      amount,
-      time,
-    };
-  };
-
-  const recentActivities = orders.slice(0, 5).map(getOrderActivity);
+  useEffect(() => {
+    fetchStats();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
       
-      {/* Encabezado Lujoso */}
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.logoText}>NOIR ESSENCE</Text>
-          <Text style={styles.logoSubtitle}>ADMINISTRACIÓN · {user?.name.toUpperCase()}</Text>
+        {navigation.canGoBack() && (
+          <TouchableOpacity 
+            activeOpacity={0.7} 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )}
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Consola Imperial</Text>
+          <Text style={styles.headerSubtitle}>Indicadores clave de Noir Essence</Text>
         </View>
-        <TouchableOpacity activeOpacity={0.7} onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutBtnText}>Salir</Text>
+        <TouchableOpacity 
+          activeOpacity={0.7} 
+          onPress={handleLogout}
+          style={styles.logoutHeaderBtn}
+        >
+          <Ionicons name="log-out-outline" size={22} color="#EB5757" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Banner de Bienvenida */}
-        <View style={styles.welcomeBanner}>
-          <Text style={styles.bannerTitle}>Panel Ejecutivo</Text>
-          <Text style={styles.bannerSubtitle}>Control operativo y métricas financieras en tiempo real.</Text>
+      {loading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loaderText}>CALCULANDO MÉTRICAS...</Text>
         </View>
-
-        {/* Métrica KPI Grid */}
-        <View style={styles.kpiContainer}>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>VENTAS TOTALES</Text>
-            <Text style={styles.kpiValue}>
-              S/. {totalSales.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-            </Text>
-            <Text style={styles.kpiSubText}>+18.5% esta semana</Text>
+      ) : (
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Tarjeta de Ventas Totales */}
+          <View style={[styles.card, styles.goldCard]}>
+            <Ionicons name="cash" size={32} color={theme.colors.background} style={styles.cardIcon} />
+            <Text style={styles.cardLabelGold}>VENTAS TOTALES</Text>
+            <Text style={styles.cardValGold}>S/. {stats?.totalSales.toFixed(2)}</Text>
+            <Text style={styles.cardHelperGold}>Ingresos aprobados en Supabase</Text>
           </View>
 
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>PEDIDOS ACTIVOS</Text>
-            <Text style={styles.kpiValue}>{activeOrdersCount}</Text>
-            <Text style={styles.kpiSubText}>
-              {pendingAssignmentCount === 1 ? '1 por asignar motorizado' : `${pendingAssignmentCount} por asignar motorizado`}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.kpiContainerSingle}>
-          <View style={styles.kpiCardSingle}>
-            <View style={styles.kpiRow}>
-              <View>
-                <Text style={styles.kpiLabel}>DESPACHADORES</Text>
-                <Text style={styles.kpiValue}>
-                  {activeCount} Activo{activeCount === 1 ? '' : 's'}
-                </Text>
+          {/* Fila de KPIs secundarios */}
+          <View style={styles.statsRow}>
+            {/* Pedidos */}
+            <View style={styles.statsCol}>
+              <View style={styles.card}>
+                <Ionicons name="receipt-outline" size={24} color={theme.colors.primary} style={styles.miniIcon} />
+                <Text style={styles.miniLabel}>PEDIDOS</Text>
+                <Text style={styles.miniVal}>{stats?.totalOrders}</Text>
+                <Text style={styles.miniHelper}>Ordenes totales</Text>
               </View>
-              <View style={styles.statusIndicator}>
-                <View style={[styles.statusDot, { backgroundColor: activeCount > 0 ? '#4CAF50' : '#FF9800' }]} />
-                <Text style={[styles.statusText, { color: activeCount > 0 ? '#4CAF50' : '#FF9800' }]}>
-                  {activeCount > 0 ? 'En Ruta' : 'Sin Envíos Activos'}
-                </Text>
+            </View>
+
+            {/* Clientes */}
+            <View style={styles.statsCol}>
+              <View style={styles.card}>
+                <Ionicons name="people-outline" size={24} color={theme.colors.primary} style={styles.miniIcon} />
+                <Text style={styles.miniLabel}>CLIENTES VIP</Text>
+                <Text style={styles.miniVal}>{stats?.totalClients}</Text>
+                <Text style={styles.miniHelper}>Cuentas registradas</Text>
               </View>
             </View>
           </View>
-        </View>
 
-        {/* Gráfico Semanal Editorial */}
-        <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>Ventas Semanales (S/.)</Text>
-          <View style={styles.chartWrapper}>
-            <View style={styles.chartBarsRow}>
-              {weeklySales.map((item, index) => {
-                const barHeight = (item.sales / maxSale) * CHART_HEIGHT;
-                return (
-                  <View key={index} style={styles.chartColumn}>
-                    <View style={styles.barContainer}>
-                      <View style={[styles.chartBar, { height: barHeight }]} />
-                    </View>
-                    <Text style={styles.chartLabel}>{item.day}</Text>
-                  </View>
-                );
-              })}
+          {/* Alerta de Stock Bajo */}
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('AdminProducts' as any)}
+            style={[
+              styles.card, 
+              stats && stats.lowStockProducts > 0 ? styles.warningCard : styles.successCard
+            ]}
+          >
+            <View style={styles.warningHeader}>
+              <Ionicons 
+                name={stats && stats.lowStockProducts > 0 ? "alert-circle" : "checkmark-circle"} 
+                size={28} 
+                color={stats && stats.lowStockProducts > 0 ? "#EB5757" : theme.colors.primary} 
+              />
+              <Text style={[
+                styles.warningTitle, 
+                { color: stats && stats.lowStockProducts > 0 ? "#EB5757" : theme.colors.primary }
+              ]}>
+                {stats && stats.lowStockProducts > 0 ? "¡Alerta de Inventario!" : "Inventario Saludable"}
+              </Text>
             </View>
-          </View>
-        </View>
+            <Text style={styles.warningDesc}>
+              {stats && stats.lowStockProducts > 0 
+                ? `Tienes ${stats.lowStockProducts} variantes de perfumes con stock crítico (5 unidades o menos). Pulsa aquí para gestionar stock.`
+                : "Todas las esencias cuentan con suficiente inventario para atender pedidos en Lima Metropolitana."
+              }
+            </Text>
+          </TouchableOpacity>
 
-        {/* Actividades Recientes */}
-        <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>Historial de Operaciones</Text>
-          <View style={styles.activityList}>
-            {recentActivities.map((act) => (
-              <View key={act.id} style={styles.activityItem}>
-                <View style={styles.activityLeft}>
-                  <Text style={styles.activityCode}>{act.orderId}</Text>
-                  <Text style={styles.activityDesc}>{act.desc}</Text>
-                </View>
-                <View style={styles.activityRight}>
-                  <Text style={styles.activityAmount}>{act.amount}</Text>
-                  <Text style={styles.activityTime}>{act.time}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
+          <TouchableOpacity 
+            activeOpacity={0.8} 
+            onPress={fetchStats}
+            style={styles.refreshButton}
+          >
+            <Ionicons name="refresh" size={16} color={theme.colors.primary} />
+            <Text style={styles.refreshButtonText}>Actualizar Consola</Text>
+          </TouchableOpacity>
 
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -215,232 +185,181 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
-  logoText: {
-    fontFamily: theme.typography.fontFamily.title,
-    fontSize: theme.typography.sizes.h2,
-    color: theme.colors.primary,
-    letterSpacing: 2,
-    fontWeight: theme.typography.weights.bold,
-  },
-  logoSubtitle: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 9,
-    color: theme.colors.textSecondary,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  logoutBtn: {
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.sm,
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.borderRadius.round,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.md,
     borderWidth: 1,
-    borderColor: theme.colors.primary,
-    backgroundColor: 'transparent',
+    borderColor: theme.colors.border,
   },
-  logoutBtnText: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.bodySmall,
-    color: theme.colors.primary,
-    fontWeight: theme.typography.weights.semibold,
+  logoutHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.borderRadius.round,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(235, 87, 87, 0.2)',
   },
-  scrollContent: {
-    paddingBottom: theme.spacing.xxxl,
+  headerTextContainer: {
+    flex: 1,
   },
-  welcomeBanner: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
-  },
-  bannerTitle: {
+  headerTitle: {
     fontFamily: theme.typography.fontFamily.title,
-    fontSize: theme.typography.sizes.h1 - 2,
+    fontSize: theme.typography.sizes.h1,
     color: theme.colors.textPrimary,
     fontWeight: theme.typography.weights.bold,
   },
-  bannerSubtitle: {
+  headerSubtitle: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.sizes.bodyMedium,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
-    lineHeight: theme.typography.lineHeights.bodyMedium,
+    marginTop: 2,
   },
-  kpiContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  kpiCard: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.md,
-    ...theme.shadows.soft,
-  },
-  kpiContainerSingle: {
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
-  },
-  kpiCardSingle: {
-    width: '100%',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.md,
-    ...theme.shadows.soft,
-  },
-  kpiRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  loaderContainer: {
+    flex: 0.8,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  kpiLabel: {
+  loaderText: {
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: 9,
+    fontSize: 12,
     color: theme.colors.primary,
     fontWeight: theme.typography.weights.bold,
     letterSpacing: 1.5,
-    marginBottom: theme.spacing.xs,
+    marginTop: theme.spacing.md,
   },
-  kpiValue: {
-    fontFamily: theme.typography.fontFamily.title,
-    fontSize: theme.typography.sizes.h2 + 2,
-    color: theme.colors.textPrimary,
-    fontWeight: theme.typography.weights.bold,
+  scrollContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxxl,
   },
-  kpiSubText: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 9,
-    color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
-  },
-  statusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceElevated,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#4CAF50',
-    marginRight: 6,
-  },
-  statusText: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 10,
-    color: '#4CAF50',
-    fontWeight: theme.typography.weights.semibold,
-  },
-  cardSection: {
+  card: {
     backgroundColor: theme.colors.surface,
-    marginHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: 1,
     borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    position: 'relative',
+    overflow: 'hidden',
     ...theme.shadows.soft,
   },
-  sectionTitle: {
+  goldCard: {
+    backgroundColor: theme.colors.primary, // Fondo oro premium
+    borderColor: theme.colors.primary,
+    minHeight: 140,
+  },
+  cardIcon: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    opacity: 0.25,
+  },
+  cardLabelGold: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 11,
+    color: theme.colors.background,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 1.5,
+  },
+  cardValGold: {
     fontFamily: theme.typography.fontFamily.title,
-    fontSize: theme.typography.sizes.bodyLarge,
-    color: theme.colors.textPrimary,
-    fontWeight: theme.typography.weights.semibold,
-    marginBottom: theme.spacing.lg,
-    letterSpacing: 0.5,
+    fontSize: 32,
+    color: theme.colors.background,
+    fontWeight: theme.typography.weights.bold,
+    marginVertical: theme.spacing.xs,
   },
-  chartWrapper: {
-    height: 160,
-    justifyContent: 'flex-end',
-    paddingBottom: theme.spacing.xs,
+  cardHelperGold: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 11,
+    color: 'rgba(13, 13, 13, 0.6)',
   },
-  chartBarsRow: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: '100%',
+    gap: theme.spacing.md,
   },
-  chartColumn: {
-    alignItems: 'center',
+  statsCol: {
     flex: 1,
   },
-  barContainer: {
-    height: CHART_HEIGHT,
-    justifyContent: 'flex-end',
-    width: 14,
+  miniIcon: {
+    marginBottom: theme.spacing.sm,
   },
-  chartBar: {
-    width: 14,
-    backgroundColor: theme.colors.primary,
-    borderTopLeftRadius: theme.borderRadius.xs,
-    borderTopRightRadius: theme.borderRadius.xs,
-  },
-  chartLabel: {
+  miniLabel: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: 10,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.sm,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 1,
   },
-  activityList: {
-    gap: theme.spacing.md,
+  miniVal: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: 24,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+    marginVertical: 2,
   },
-  activityItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  activityLeft: {
-    flex: 1.3,
-  },
-  activityCode: {
+  miniHelper: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: 10,
+    color: theme.colors.textMuted,
+  },
+  warningCard: {
+    borderColor: 'rgba(235, 87, 87, 0.3)',
+    backgroundColor: 'rgba(235, 87, 87, 0.05)',
+  },
+  successCard: {
+    borderColor: 'rgba(212, 175, 55, 0.2)',
+    backgroundColor: 'rgba(212, 175, 55, 0.03)',
+  },
+  warningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  warningTitle: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: theme.typography.sizes.bodyLarge,
+    fontWeight: theme.typography.weights.semibold,
+  },
+  warningDesc: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeights.bodyMedium,
+    marginTop: 4,
+  },
+  refreshButton: {
+    height: 44,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface,
+    marginTop: theme.spacing.sm,
+  },
+  refreshButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
     color: theme.colors.primary,
     fontWeight: theme.typography.weights.bold,
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  activityDesc: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.bodySmall,
-    color: theme.colors.textPrimary,
-    fontWeight: theme.typography.weights.medium,
-  },
-  activityRight: {
-    flex: 0.7,
-    alignItems: 'flex-end',
-  },
-  activityAmount: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.bodySmall,
-    color: theme.colors.textPrimary,
-    fontWeight: theme.typography.weights.bold,
-  },
-  activityTime: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 9,
-    color: theme.colors.textMuted,
-    marginTop: 2,
   },
 });

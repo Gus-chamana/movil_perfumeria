@@ -48,6 +48,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [isFavorite, setIsFavorite] = useState(isFavoriteInitial);
   const heartScale = useRef(new Animated.Value(1)).current;
 
+  // Manejo de Añadir al Carrito Directo (+) evitando propagación de clic
+  const handleAddToCart = (e: any) => {
+    e.stopPropagation();
+    if (onAddToCartPress) {
+      onAddToCartPress();
+    }
+  };
+
   // Formateador de Moneda en Soles Peruanos o Dólares (Estilo Noir: S/. XXX.XX)
   const formatPrice = (amount: number) => {
     return `S/. ${amount.toFixed(2)}`;
@@ -120,6 +128,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {isFavorite ? '♥' : '♡'}
           </Animated.Text>
         </TouchableOpacity>
+
+        {/* Botón para Añadir al Carrito Directamente (+) */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleAddToCart}
+          style={styles.addToCartButton}
+        >
+          <Text style={styles.plusIcon}>+</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Información del Producto */}
@@ -134,23 +151,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {name}
         </Text>
 
-        {/* Fila de precio y botón de añadir */}
-        <View style={styles.priceRow}>
-          <Text style={styles.priceText}>
-            {formatPrice(price)}
-          </Text>
-          
-          <TouchableOpacity 
-            activeOpacity={0.7} 
-            onPress={(e) => {
-              e.stopPropagation(); // Evita que se dispare el onPress de la tarjeta completa
-              if (onAddToCartPress) onAddToCartPress();
-            }}
-            style={styles.addToCartBtn}
-          >
-            <Text style={styles.addToCartBtnText}>+</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Precio en Oro Premium */}
+        <Text style={styles.priceText}>
+          {formatPrice(price)}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -256,27 +260,30 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.bodyMedium,
     color: theme.colors.textPrimary, // Blanco para precio o dorado
     fontWeight: theme.typography.weights.bold,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginTop: theme.spacing.xs,
   },
-  addToCartBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primary,
+  addToCartButton: {
+    position: 'absolute',
+    right: theme.spacing.sm,
+    bottom: theme.spacing.sm,
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.round,
+    backgroundColor: theme.colors.primary, // Oro Premium
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  addToCartBtnText: {
+  plusIcon: {
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: 16,
-    color: theme.colors.background,
+    fontSize: 18,
     fontWeight: 'bold',
-    lineHeight: 18,
-    marginTop: -1,
+    color: theme.colors.background, // Contraste oscuro
+    lineHeight: Platform.OS === 'ios' ? 22 : 18,
+    textAlign: 'center',
   },
 });

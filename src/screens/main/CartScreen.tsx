@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -13,22 +13,40 @@ import {
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { PRODUCTS_MOCK, Product } from '../../assets/productsData';
+import { Product } from '../../assets/productsData';
+import { cartService, CartItem } from '../../services/cartService';
 import { useNavigation } from '@react-navigation/native';
-import { useCart } from '../../context/CartContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
 
 export default function CartScreen() {
   const navigation = useNavigation<CartScreenNavigationProp>();
-  const { cartItems, increaseQty, decreaseQty, removeItem } = useCart();
+  
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  // Suscribirse de forma reactiva a los cambios globales del carrito
+  useEffect(() => {
+    const unsubscribe = cartService.subscribe((items) => {
+      setCartItems(items);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Manejo de cantidades delegadas al servicio global de carrito
+  const handleIncreaseQty = (id: string) => {
+    cartService.increaseQty(id);
+  };
+
+  const handleDecreaseQty = (id: string) => {
+    cartService.decreaseQty(id);
+  };
+
+  const handleRemoveItem = (id: string) => {
+    cartService.removeFromCart(id);
+  };
 
   // Cálculos dinámicos
   const subtotal = cartItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -85,7 +103,7 @@ export default function CartScreen() {
                 <View style={styles.qtyContainer}>
                   <TouchableOpacity 
                     activeOpacity={0.7} 
-                    onPress={() => removeItem(item.product.id)}
+                    onPress={() => handleRemoveItem(item.product.id)}
                     style={styles.deleteButton}
                   >
                     <Text style={styles.deleteText}>×</Text>
@@ -94,7 +112,7 @@ export default function CartScreen() {
                   <View style={styles.counterRow}>
                     <TouchableOpacity 
                       activeOpacity={0.7} 
-                      onPress={() => decreaseQty(item.product.id)}
+                      onPress={() => handleDecreaseQty(item.product.id)}
                       style={styles.counterBtn}
                     >
                       <Text style={styles.counterBtnText}>-</Text>
@@ -104,7 +122,7 @@ export default function CartScreen() {
                     
                     <TouchableOpacity 
                       activeOpacity={0.7} 
-                      onPress={() => increaseQty(item.product.id)}
+                      onPress={() => handleIncreaseQty(item.product.id)}
                       style={styles.counterBtn}
                     >
                       <Text style={styles.counterBtnText}>+</Text>

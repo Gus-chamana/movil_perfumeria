@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -6,142 +6,102 @@ import {
   SafeAreaView, 
   ScrollView, 
   TouchableOpacity,
-  StatusBar,
-  ActivityIndicator
+  StatusBar
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
-import { useAuth } from '../../context/AuthContext';
-import { getOrderByIdAPI } from '../../services/apiService';
+import { useAuth } from '../../services/AuthContext';
+import { apiClient } from '../../services/api';
+import { ActivityIndicator } from 'react-native';
 
 type TrackingScreenRouteProp = RouteProp<RootStackParamList, 'Tracking'>;
 type TrackingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Tracking'>;
 
+interface TimelineEvent {
+  title: string;
+  time: string;
+  description: string;
+  status: 'completed' | 'active' | 'pending';
+}
+
 export default function TrackingScreen() {
   const route = useRoute<TrackingScreenRouteProp>();
   const navigation = useNavigation<TrackingScreenNavigationProp>();
-  const { token } = useAuth();
+  const { userToken, userProfile } = useAuth();
   
-  // Capturar el ID del pedido generado o por defecto
-  const orderId = route.params?.orderId || 'NE-49201';
-  
-  const [order, setOrder] = useState<any>(null);
+  const orderId = route.params?.orderId || 'NE-948271';
+
+  // Estados reactivos locales para almacenar el tracking en caliente de Supabase
+  const [trackingData, setTrackingData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadOrderData = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    const fetchTracking = async () => {
       try {
-        const data = await getOrderByIdAPI(orderId, token);
-        setOrder(data);
-        setError(null);
-      } catch (err: any) {
-        console.warn('Error cargando tracking real:', err);
-        setError('No se pudo conectar al servidor de Supabase. Mostrando fallback.');
+        setLoading(true);
+        // Llamada al endpoint dinámico de tracking protegido por JWT
+        const data = await apiClient.get(`/orders/${orderId}/tracking`, userToken || undefined);
+        setTrackingData(data);
+      } catch (error) {
+        console.error('[Error de Red en TrackingScreen]:', error);
       } finally {
         setLoading(false);
       }
     };
+    fetchTracking();
+  }, [orderId]);
 
-    loadOrderData();
-    // Consulta en segundo plano cada 10 segundos
-    const interval = setInterval(loadOrderData, 10000);
-    return () => clearInterval(interval);
-  }, [orderId, token]);
+  // Formatear la bitácora logística dinámica en base a los datos reales de Supabase
+  const getTimelineEvents = (): TimelineEvent[] => {
+    if (!trackingData || !trackingData.timeline) return [];
 
-  const handleReturnHome = () => {
-    navigation.replace('Main');
-  };
-
-  // Fallback local en caso de error o de no estar logueado
-  const getFallbackOrder = () => {
-    return {
-      id: orderId,
-      direccionEnvio: 'Av. Javier Prado Este 1024, San Borja, Lima',
-      estado: 'CREADO',
-      envio: {
-        numeroTracking: 'NX-1934',
-        tiempoEstimado: '30-50 min',
-        motorizado: null,
-        estados: []
-      }
-    };
-  };
-
-  const activeOrder = order || getFallbackOrder();
-
-  // Mapear los estados del backend a la bitácora del envío
-  const getTimelineFromOrder = (ord: any) => {
-    const currentStatus = ord.estado; // 'CREADO' | 'PREPARANDO' | 'EN_RUTA' | 'ENTREGADO'
-
-    const getStatusTime = (status: string) => {
-      const found = ord.envio?.estados?.find((e: any) => e.estado === status);
-      if (found) {
-        const d = new Date(found.fecha);
-        const hours = d.getHours();
-        const minutes = d.getMinutes().toString().padStart(2, '0');
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        return `${hours % 12 || 12}:${minutes} ${ampm}`;
-      }
-      if (status === 'CREADO' && ord.createdAt) {
-        const d = new Date(ord.createdAt);
-        return `${d.getHours() % 12 || 12}:${d.getMinutes().toString().padStart(2, '0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
-      }
-      return 'Estimado';
-    };
+    const estados = trackingData.timeline.map((t: any) => t.status);
+    const totalEstados = ['CREADO', 'PREPARANDO', 'EN_RUTA', 'ENTREGADO'];
+    const currentStatus = trackingData.currentStatus;
 
     return [
       {
         title: 'Pedido Confirmado',
-        time: getStatusTime('CREADO'),
-        description: 'Tu transacción ha sido validada de forma exitosa en Supabase.',
-        status: 'completed' as const,
+        time: trackingData.timeline.find((t: any) => t.status === 'CREADO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'CREADO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        description: 'Tu transacción ha sido validada de forma exitosa. Transmitido a bodega central.',
+        status: estados.includes('CREADO') ? (currentStatus === 'CREADO' ? 'active' : 'completed') : 'pending',
       },
       {
         title: 'Preparación y Embalaje de Lujo',
-        time: getStatusTime('PREPARANDO') !== 'Estimado' ? getStatusTime('PREPARANDO') : (currentStatus === 'PREPARANDO' ? 'En proceso' : 'Estimado'),
-        description: 'Tu fragancia premium está siendo sellada y empacada con envoltura protectora.',
-        status: currentStatus === 'CREADO' ? 'pending' : (currentStatus === 'PREPARANDO' ? 'active' : 'completed') as any,
+        time: trackingData.timeline.find((t: any) => t.status === 'PREPARANDO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'PREPARANDO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        description: 'Tu fragancia ha sido sellada y empaquetada con envoltura protectora Noir Essence.',
+        status: estados.includes('PREPARANDO') ? (currentStatus === 'PREPARANDO' ? 'active' : 'completed') : 'pending',
       },
       {
         title: 'En Camino a tu Destino',
-        time: getStatusTime('EN_RUTA'),
-        description: ord.envio?.motorizado 
-          ? `Asignado a ${ord.envio.motorizado.nombre}. El motorizado exclusivo va en ruta.` 
-          : 'Esperando asignación de motorizado del conserje.',
-        status: (currentStatus === 'CREADO' || currentStatus === 'PREPARANDO') ? 'pending' : (currentStatus === 'EN_RUTA' ? 'active' : 'completed') as any,
+        time: trackingData.timeline.find((t: any) => t.status === 'EN_RUTA') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'EN_RUTA').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'En Tránsito',
+        description: 'El motorizado exclusivo ha salido del centro de distribución y va en ruta.',
+        status: estados.includes('EN_RUTA') ? (currentStatus === 'EN_RUTA' ? 'active' : 'completed') : 'pending',
       },
       {
         title: 'Entrega en Puerta',
-        time: getStatusTime('ENTREGADO'),
-        description: 'Fragancia entregada de manera exitosa en mano propia.',
-        status: currentStatus === 'ENTREGADO' ? 'completed' : 'pending' as any,
+        time: trackingData.timeline.find((t: any) => t.status === 'ENTREGADO') 
+          ? new Date(trackingData.timeline.find((t: any) => t.status === 'ENTREGADO').date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : `Estimado ${trackingData.estimatedTime || '30 min'}`,
+        description: 'Fragancia entregada en mano propia bajo estrictos protocolos de bioseguridad.',
+        status: estados.includes('ENTREGADO') ? 'active' : 'pending',
       },
     ];
   };
 
-  const TIMELINE_EVENTS = getTimelineFromOrder(activeOrder);
-
-  if (loading && !order) {
-    return (
-      <SafeAreaView style={[styles.container, styles.center]}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Conectando con Supabase...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const motorizadoNombre = activeOrder.envio?.motorizado?.nombre;
-  const motorizadoTelefono = activeOrder.envio?.motorizado?.telefono;
-  const placaVehiculo = activeOrder.envio?.motorizado?.placaVehiculo;
+  const handleReturnHome = () => {
+    // Regresa a la pestaña principal del Core (HomeScreen)
+    navigation.replace('Main');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -150,55 +110,53 @@ export default function TrackingScreen() {
       {/* Cabecera */}
       <View style={styles.header}>
         <Text style={styles.headerSubtitle}>SEGUIMIENTO EN TIEMPO REAL</Text>
-        <Text style={styles.orderIdText}>{activeOrder.envio?.numeroTracking || orderId}</Text>
+        <Text style={styles.orderIdText}>{orderId}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>{error}</Text>
-          </View>
-        )}
-
-        {/* 1. Datos del Despachador / Motorizado (Tarjeta Flotante Premium) */}
-        <View style={styles.dispatcherCard}>
-          <View style={styles.dispatcherInfoRow}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarCircleText}>
-                {motorizadoNombre ? motorizadoNombre.split(' ').map((n: any) => n[0]).join('').toUpperCase() : 'NE'}
-              </Text>
-            </View>
-            <View style={styles.dispatcherMeta}>
-              <Text style={styles.driverName}>{motorizadoNombre || 'Por asignar despachador'}</Text>
-              <Text style={styles.vehicleType}>
-                {motorizadoNombre 
-                  ? `Repartidor Noir Conciérge · Tel: ${motorizadoTelefono || 'N/A'}` 
-                  : 'Tu pedido está en proceso de facturación y embalaje.'}
-              </Text>
-            </View>
-            <View style={styles.plateBadge}>
-              <Text style={styles.plateText}>{placaVehiculo || '---'}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
-          <Text style={styles.deliveryAddress}>
-            {activeOrder.direccionEnvio}
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ marginTop: theme.spacing.md, color: theme.colors.textSecondary, fontFamily: theme.typography.fontFamily.body, fontSize: 13, letterSpacing: 1.5 }}>
+            LOCALIZANDO MOTORIZADO...
           </Text>
         </View>
-
-        {/* 2. Línea de Tiempo Vertical Interactiva */}
-        <View style={styles.timelineCard}>
-          <Text style={styles.timelineTitle}>Bitácora del Envío</Text>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          <View style={styles.timelineWrapper}>
-            {TIMELINE_EVENTS.map((event, index) => {
-              const isLast = index === TIMELINE_EVENTS.length - 1;
-              const isCompleted = event.status === 'completed';
-              const isActive = event.status === 'active';
+          {/* 1. Datos del Despachador / Motorizado (Tarjeta Flotante Premium) */}
+          <View style={styles.dispatcherCard}>
+            <View style={styles.dispatcherInfoRow}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarCircleText}>
+                  {trackingData?.courier ? trackingData.courier.name.split(' ').map((n: string) => n[0]).join('') : 'MS'}
+                </Text>
+              </View>
+              <View style={styles.dispatcherMeta}>
+                <Text style={styles.driverName}>{trackingData?.courier?.name || 'Mateo Silva'}</Text>
+                <Text style={styles.vehicleType}>Repartidor Noir Concierge</Text>
+              </View>
+              <View style={styles.plateBadge}>
+                <Text style={styles.plateText}>{trackingData?.courier?.plate || 'NG-5830'}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <Text style={styles.deliveryLabel}>Dirección de Entrega</Text>
+            <Text style={styles.deliveryAddress}>
+              {trackingData?.ordenes?.direccion_envio || userProfile?.address || 'Av. Javier Prado Este 1024, Dpto 402, San Borja, Lima'}
+            </Text>
+          </View>
+
+          {/* 2. Línea de Tiempo Vertical Interactiva */}
+          <View style={styles.timelineCard}>
+            <Text style={styles.timelineTitle}>Bitácora del Envío</Text>
+            
+            <View style={styles.timelineWrapper}>
+              {getTimelineEvents().map((event, index, arr) => {
+                const isLast = index === arr.length - 1;
+                const isCompleted = event.status === 'completed';
+                const isActive = event.status === 'active';
               
               return (
                 <View key={index} style={styles.timelineRow}>
@@ -257,6 +215,7 @@ export default function TrackingScreen() {
         />
 
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -265,30 +224,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: theme.spacing.md,
-    fontFamily: theme.typography.fontFamily.body,
-    color: theme.colors.textSecondary,
-    fontSize: theme.typography.sizes.bodyMedium,
-  },
-  errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
-  },
-  errorBannerText: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.bodySmall,
-    color: theme.colors.error,
-    textAlign: 'center',
   },
   header: {
     paddingHorizontal: theme.spacing.lg,
@@ -435,7 +370,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   nodeCompleted: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary, // Nodos completados dorados
   },
   nodeActive: {
     backgroundColor: theme.colors.background,
@@ -454,15 +389,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     position: 'absolute',
     top: 14,
-    bottom: -theme.spacing.lg - 6,
+    bottom: -theme.spacing.lg - 6, // Conecta elegantemente con el siguiente nodo
     zIndex: 1,
   },
   lineCompleted: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary, // Línea de conexión completada en dorado
   },
   eventBody: {
     flex: 1,
-    marginTop: -2,
+    marginTop: -2, // Alinea perfectamente el texto con el nodo circular
   },
   eventHeaderRow: {
     flexDirection: 'row',
