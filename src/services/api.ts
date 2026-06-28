@@ -1,6 +1,6 @@
 // ⚠️ REEMPLAZA ESTA IP por la Dirección IPv4 real de tu computadora (la que te dio ipconfig)
 // Esto permite que el celular físico o emulador se conecte de inmediato por tu red Wi-Fi
-export const API_URL = 'http://192.168.18.12:3000/api';
+export const API_URL = 'http://192.168.18.17:3000/api';
 
 // Cliente de Peticiones HTTP genérico usando fetch nativo de JavaScript
 export const apiClient = {

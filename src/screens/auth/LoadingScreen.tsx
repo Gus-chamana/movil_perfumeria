@@ -34,9 +34,9 @@ export default function LoadingScreen() {
       })
     ]).start();
 
-    // Redirección elegante al Login después de 2.2 segundos
+    // Redirección elegante al Main después de 2.2 segundos
     const timer = setTimeout(() => {
-      navigation.replace('Login');
+      navigation.replace('Main');
     }, 2200);
 
     return () => clearTimeout(timer);

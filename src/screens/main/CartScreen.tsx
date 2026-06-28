@@ -18,12 +18,14 @@ import { cartService, CartItem } from '../../services/cartService';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
+import { useAuth } from '../../services/AuthContext';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 
 export default function CartScreen() {
   const navigation = useNavigation<CartScreenNavigationProp>();
+  const { userToken } = useAuth();
   
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
@@ -55,7 +57,14 @@ export default function CartScreen() {
   const total = subtotal + igv + shipping;
 
   const handleProceedToCheckout = () => {
-    navigation.navigate('Checkout');
+    if (!userToken) {
+      navigation.navigate('Auth', {
+        screen: 'Login',
+        params: { redirectTo: 'Checkout' }
+      } as any);
+    } else {
+      navigation.navigate('Checkout');
+    }
   };
 
   const handleExploreCatalog = () => {

@@ -150,7 +150,7 @@ export default function AdminProductsScreen() {
       fetchProducts();
     } catch (error: any) {
       console.error('[Error al crear producto]:', error);
-      Alert.alert('Error al registrar', error.message || 'No se pudo crear el perfume en Supabase.');
+      Alert.alert('Error al registrar', error.message || 'No se pudo crear el perfume.');
     } finally {
       setSaving(false);
     }
@@ -370,7 +370,7 @@ export default function AdminProductsScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="cube" size={48} color={theme.colors.border} />
           <Text style={styles.emptyTitle}>Catálogo Vacío</Text>
-          <Text style={styles.emptySubtitle}>No se encontraron perfumes registrados en Supabase en este momento.</Text>
+          <Text style={styles.emptySubtitle}>No se encontraron perfumes registrados en este momento.</Text>
         </View>
       )}
 

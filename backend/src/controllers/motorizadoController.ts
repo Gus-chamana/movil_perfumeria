@@ -310,7 +310,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     });
 
     res.status(200).json({
-      message: 'Tu perfil logístico ha sido actualizado de forma exitosa en Supabase.',
+      message: 'Tu perfil logístico ha sido actualizado de forma exitosa.',
       profile: {
         id: motorizadoActualizado.id,
         nombre: motorizadoActualizado.nombre,

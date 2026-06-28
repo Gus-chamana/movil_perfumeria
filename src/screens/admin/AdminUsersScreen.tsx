@@ -97,7 +97,7 @@ export default function AdminUsersScreen() {
       Alert.alert('¡Éxito!', `El usuario ahora tiene el rol de ${targetRole}.`);
     } catch (error: any) {
       console.error('[Error al cambiar rol]:', error);
-      Alert.alert('Error', error.message || 'No se pudo actualizar el rol en Supabase.');
+      Alert.alert('Error', error.message || 'No se pudo actualizar el rol.');
       
       // Revertir cambio si falla
       fetchUsers();
@@ -115,7 +115,7 @@ export default function AdminUsersScreen() {
 
     Alert.alert(
       '⚠️ ELIMINAR USUARIO',
-      `¿Estás absolutamente seguro de que deseas eliminar permanentemente a "${email}"?\n\nEsta acción eliminará su cuenta, perfiles y direcciones de Supabase en cascada de forma irreversible.`,
+      `¿Estás absolutamente seguro de que deseas eliminar permanentemente a "${email}"?\n\nEsta acción eliminará su cuenta, perfiles y direcciones en cascada de forma irreversible.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { 
@@ -136,7 +136,7 @@ export default function AdminUsersScreen() {
       console.log(`🗑️ Eliminando usuario ${userId} de Supabase...`);
       await apiClient.delete(`/admin/users/${userId}`, userToken || undefined);
       
-      Alert.alert('Eliminado', 'El usuario fue removido correctamente de Supabase.');
+      Alert.alert('Eliminado', 'El usuario fue removido correctamente.');
     } catch (error: any) {
       console.error('[Error al eliminar usuario]:', error);
       Alert.alert('Error al Eliminar', error.message || 'No se pudo completar la eliminación.');
@@ -169,7 +169,7 @@ export default function AdminUsersScreen() {
         )}
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Gobernanza</Text>
-          <Text style={styles.headerSubtitle}>Gestión de usuarios y accesos Supabase</Text>
+          <Text style={styles.headerSubtitle}>Gestión de usuarios y accesos</Text>
         </View>
         <TouchableOpacity 
           activeOpacity={0.7} 
@@ -266,7 +266,7 @@ export default function AdminUsersScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="people" size={48} color={theme.colors.border} />
           <Text style={styles.emptyTitle}>Sin Cuentas</Text>
-          <Text style={styles.emptySubtitle}>No se encontraron usuarios en tu Supabase.</Text>
+          <Text style={styles.emptySubtitle}>No se encontraron usuarios.</Text>
         </View>
       )}
     </SafeAreaView>

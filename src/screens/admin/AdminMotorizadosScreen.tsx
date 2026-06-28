@@ -135,7 +135,7 @@ export default function AdminMotorizadosScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="bicycle" size={48} color={theme.colors.border} />
           <Text style={styles.emptyTitle}>Sin Flota Registrada</Text>
-          <Text style={styles.emptySubtitle}>No hay motorizados registrados en tu base de datos de Supabase en este momento.</Text>
+          <Text style={styles.emptySubtitle}>No hay motorizados registrados en este momento.</Text>
         </View>
       )}
     </SafeAreaView>

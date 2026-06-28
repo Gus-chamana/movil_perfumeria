@@ -13,7 +13,7 @@ import {
 import { theme } from '../../theme/theme';
 import { CustomInput } from '../../components/CustomInput';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 import { useAuth } from '../../services/AuthContext';
@@ -22,6 +22,7 @@ type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList
 
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const route = useRoute<any>();
   const { registerUser, loginUser } = useAuth();
   
   // Control de Pasos (1: Datos de Acceso, 2: Dirección Principal)
@@ -178,7 +179,18 @@ export default function RegisterScreen() {
       // 2. Tras registrarse, iniciar sesión automáticamente
       await loginUser(email, password);
       // 3. Redirigir al flujo principal de la App
-      navigation.replace('Main');
+      const redirectTo = route.params?.redirectTo;
+      if (redirectTo) {
+        navigation.reset({
+          index: 1,
+          routes: [
+            { name: 'Main' },
+            { name: redirectTo }
+          ]
+        } as any);
+      } else {
+        navigation.replace('Main');
+      }
     } catch (error: any) {
       setAddressError(error.message || 'Ocurrió un error al completar el registro.');
     } finally {

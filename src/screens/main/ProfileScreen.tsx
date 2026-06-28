@@ -88,7 +88,7 @@ export default function ProfileScreen() {
       // Actualizar el estado global del AuthContext en caliente
       updateUserProfile(response.profile);
       
-      Alert.alert('¡Éxito Absoluto!', 'Tus datos de perfil y dirección de entrega han sido actualizados correctamente en Supabase.');
+      Alert.alert('¡Éxito Absoluto!', 'Tus datos de perfil y dirección de entrega han sido actualizados correctamente.');
     } catch (error: any) {
       console.error('[Error al actualizar perfil]:', error);
       Alert.alert('Error de Guardado', error.message || 'No se pudo conectar con el servidor para guardar los cambios.');
@@ -115,6 +115,35 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  if (!userToken) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+        
+        {/* 1. Barra de Encabezado Premium */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Mi Atelier</Text>
+          <Text style={styles.headerSubtitle}>Gestión de cuenta y preferencias exclusivas</Text>
+        </View>
+
+        <View style={styles.loginPromptContainer}>
+          <View style={styles.loginPromptCard}>
+            <Ionicons name="person-outline" size={48} color={theme.colors.primary} style={styles.loginPromptIcon} />
+            <Text style={styles.loginPromptTitle}>Miembro Noir Essence</Text>
+            <Text style={styles.loginPromptSubtitle}>
+              Inicia sesión para gestionar tu cuenta, ver tu historial de pedidos y configurar tus datos de entrega exclusivos.
+            </Text>
+            <LuxuryButton
+              title="Iniciar Sesión"
+              onPress={() => navigation.navigate('Auth', { screen: 'Login' })}
+              style={styles.loginPromptButton}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -224,7 +253,7 @@ export default function ProfileScreen() {
             {updating ? (
               <View style={styles.loaderContainer}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={styles.loaderText}>GUARDANDO EN SUPABASE...</Text>
+                <Text style={styles.loaderText}>GUARDANDO...</Text>
               </View>
             ) : (
               <LuxuryButton
@@ -441,5 +470,44 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: theme.colors.textSecondary,
     marginTop: 2,
+  },
+  loginPromptContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    backgroundColor: theme.colors.background,
+  },
+  loginPromptCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    width: '100%',
+    ...theme.shadows.soft,
+  },
+  loginPromptIcon: {
+    marginBottom: theme.spacing.md,
+  },
+  loginPromptTitle: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: theme.typography.sizes.h2,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+    marginBottom: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  loginPromptSubtitle: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeights.bodyMedium,
+    marginBottom: theme.spacing.xl,
+    textAlign: 'center',
+  },
+  loginPromptButton: {
+    width: '100%',
   },
 });
