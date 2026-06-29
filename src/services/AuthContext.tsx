@@ -1,5 +1,6 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { apiClient } from './api';
+import { favoritesService } from './favoritesService';
 
 export interface UserProfile {
   id: string;
@@ -28,6 +29,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userToken, setUserToken] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sincronizar favoritos del usuario al iniciar/cerrar sesión
+  useEffect(() => {
+    favoritesService.loadFavorites(userToken);
+  }, [userToken]);
 
   // 1. Iniciar sesión llamando a la API Express + Supabase
   const loginUser = async (email: string, password: string) => {

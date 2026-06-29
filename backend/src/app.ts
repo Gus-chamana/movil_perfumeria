@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes';
 import orderRoutes from './routes/orderRoutes';
 import adminRoutes from './routes/adminRoutes';
 import motorizadoRoutes from './routes/motorizadoRoutes';
+import favoriteRoutes from './routes/favoriteRoutes';
 
 const app: Application = express();
 
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/motorizado', motorizadoRoutes);
+app.use('/api/favorites', favoriteRoutes);
 
 // Ruta Base de Prueba para verificar estado de salud
 app.get('/', (req: Request, res: Response) => {
