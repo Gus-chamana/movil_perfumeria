@@ -65,13 +65,31 @@ export default function LoginScreen() {
       // Redirigir al flujo principal de la App tras login exitoso
       const redirectTo = route.params?.redirectTo;
       if (redirectTo) {
-        navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'Main' },
-            { name: redirectTo }
-          ]
-        } as any);
+        if (
+          redirectTo === 'FavoritesTab' || 
+          redirectTo === 'ProfileTab' || 
+          redirectTo === 'HomeTab' || 
+          redirectTo === 'CatalogTab' || 
+          redirectTo === 'CartTab'
+        ) {
+          navigation.reset({
+            index: 0,
+            routes: [
+              { 
+                name: 'Main', 
+                params: { screen: redirectTo } 
+              }
+            ]
+          } as any);
+        } else {
+          navigation.reset({
+            index: 1,
+            routes: [
+              { name: 'Main' },
+              { name: redirectTo }
+            ]
+          } as any);
+        }
       } else {
         navigation.replace('Main');
       }
