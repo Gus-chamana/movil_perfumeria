@@ -265,7 +265,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     });
 
     res.status(200).json({
-      message: '¡Perfil actualizado con éxito absoluto en Supabase!',
+      message: '¡Perfil actualizado con éxito absoluto!',
       profile: perfilActualizado
     });
   } catch (error) {

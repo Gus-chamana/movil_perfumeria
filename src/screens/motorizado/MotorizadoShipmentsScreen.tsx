@@ -49,7 +49,7 @@ export default function MotorizadoShipmentsScreen() {
       setAvailableShipments(data.available || []);
     } catch (error) {
       console.error('[Error al cargar envíos]:', error);
-      Alert.alert('Error', 'No se pudieron recuperar las bitácoras logísticas de Supabase.');
+      Alert.alert('Error', 'No se pudieron recuperar las bitácoras logísticas.');
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -12,7 +12,7 @@ import {
 import { theme } from '../../theme/theme';
 import { CustomInput } from '../../components/CustomInput';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 import { useAuth } from '../../services/AuthContext';
@@ -21,6 +21,7 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, '
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const route = useRoute<any>();
   const { loginUser } = useAuth();
   
   // Estados de Formulario
@@ -62,7 +63,36 @@ export default function LoginScreen() {
     try {
       await loginUser(email, password);
       // Redirigir al flujo principal de la App tras login exitoso
-      navigation.replace('Main');
+      const redirectTo = route.params?.redirectTo;
+      if (redirectTo) {
+        if (
+          redirectTo === 'FavoritesTab' || 
+          redirectTo === 'ProfileTab' || 
+          redirectTo === 'HomeTab' || 
+          redirectTo === 'CatalogTab' || 
+          redirectTo === 'CartTab'
+        ) {
+          navigation.reset({
+            index: 0,
+            routes: [
+              { 
+                name: 'Main', 
+                params: { screen: redirectTo } 
+              }
+            ]
+          } as any);
+        } else {
+          navigation.reset({
+            index: 1,
+            routes: [
+              { name: 'Main' },
+              { name: redirectTo }
+            ]
+          } as any);
+        }
+      } else {
+        navigation.replace('Main');
+      }
     } catch (error: any) {
       setPasswordError(error.message || 'Correo o contraseña incorrectos.');
     } finally {
@@ -74,7 +104,10 @@ export default function LoginScreen() {
     // Para simplificar la navegación en el AuthStack
     // Dado que Login y Register son parte del Auth Navigator
     // Podemos navegar al Register del AuthStack
-    navigation.navigate('Auth', { screen: 'Register' } as any);
+    navigation.navigate('Auth', { 
+      screen: 'Register',
+      params: { redirectTo: route.params?.redirectTo }
+    } as any);
   };
 
   return (

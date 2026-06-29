@@ -107,7 +107,7 @@ export default function AdminDashboardScreen() {
             <Ionicons name="cash" size={32} color={theme.colors.background} style={styles.cardIcon} />
             <Text style={styles.cardLabelGold}>VENTAS TOTALES</Text>
             <Text style={styles.cardValGold}>S/. {stats?.totalSales.toFixed(2)}</Text>
-            <Text style={styles.cardHelperGold}>Ingresos aprobados en Supabase</Text>
+            <Text style={styles.cardHelperGold}>Ingresos aprobados</Text>
           </View>
 
           {/* Fila de KPIs secundarios */}

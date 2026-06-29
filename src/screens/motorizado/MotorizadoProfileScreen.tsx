@@ -47,7 +47,7 @@ export default function MotorizadoProfileScreen() {
       setActivo(data.activo ?? true);
     } catch (error) {
       console.error('[Error al cargar perfil de motorizado]:', error);
-      Alert.alert('Error', 'No se pudo cargar el perfil de motorizado de Supabase.');
+      Alert.alert('Error', 'No se pudo cargar el perfil de motorizado.');
     } finally {
       setLoading(false);
     }
@@ -207,7 +207,7 @@ export default function MotorizadoProfileScreen() {
               {updating ? (
                 <View style={styles.loaderActionContainer}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
-                  <Text style={styles.loaderActionText}>GUARDANDO EN SUPABASE...</Text>
+                  <Text style={styles.loaderActionText}>GUARDANDO...</Text>
                 </View>
               ) : (
                 <LuxuryButton

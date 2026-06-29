@@ -40,7 +40,7 @@ export default function MotorizadoHistoryScreen() {
       setHistory(data);
     } catch (error) {
       console.error('[Error al obtener historial]:', error);
-      Alert.alert('Error', 'No se pudo recuperar tu historial de entregas de Supabase.');
+      Alert.alert('Error', 'No se pudo recuperar tu historial de entregas.');
     } finally {
       setLoading(false);
     }

@@ -21,6 +21,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../../navigation/navigation';
 import { apiClient } from '../../services/api';
 import { cartService } from '../../services/cartService';
+import { useAuth } from '../../services/AuthContext';
 
 type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList, 'HomeTab'>;
 
@@ -32,9 +33,18 @@ const CATEGORIES: ('Todos' | 'Amaderados' | 'Orientales' | 'Florales' | 'Cítric
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
+  const { userProfile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Obtener Iniciales del usuario
+  const getInitials = () => {
+    if (!userProfile?.name) return 'NE';
+    const first = userProfile.name.charAt(0).toUpperCase();
+    const last = userProfile.lastName ? userProfile.lastName.charAt(0).toUpperCase() : '';
+    return `${first}${last}`;
+  };
 
   // Cargar catálogo de perfumes en tiempo real desde Supabase mediante Express
   useEffect(() => {
@@ -88,8 +98,12 @@ export default function HomeScreen() {
           <Text style={styles.logoText}>NOIR ESSENCE</Text>
           <Text style={styles.logoSubtitle}>HAUTE PARFUMERIE</Text>
         </View>
-        <TouchableOpacity activeOpacity={0.7} style={styles.avatarButton}>
-          <Text style={styles.avatarText}>GA</Text>
+        <TouchableOpacity 
+          activeOpacity={0.7} 
+          onPress={() => navigation.navigate('ProfileTab')}
+          style={styles.avatarButton}
+        >
+          <Text style={styles.avatarText}>{getInitials()}</Text>
         </TouchableOpacity>
       </View>
 

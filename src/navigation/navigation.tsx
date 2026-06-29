@@ -13,6 +13,7 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 import LoadingScreen from '../screens/auth/LoadingScreen';
 import HomeScreen from '../screens/main/HomeScreen';
 import CatalogScreen from '../screens/main/CatalogScreen';
+import FavoritesScreen from '../screens/main/FavoritesScreen';
 import CartScreen from '../screens/main/CartScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import CheckoutScreen from '../screens/main/CheckoutScreen';
@@ -46,6 +47,7 @@ export type MainTabParamList = {
   // Client tabs
   HomeTab: undefined;
   CatalogTab: undefined;
+  FavoritesTab: undefined;
   CartTab: undefined;
   ProfileTab: undefined;
   // Admin tabs
@@ -169,6 +171,8 @@ export function MainTabNavigator() {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'CatalogTab') {
             iconName = focused ? 'grid' : 'grid-outline';
+          } else if (route.name === 'FavoritesTab') {
+            iconName = focused ? 'heart' : 'heart-outline';
           } else if (route.name === 'CartTab') {
             iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'ProfileTab') {
@@ -256,6 +260,11 @@ export function MainTabNavigator() {
             name="CatalogTab" 
             component={CatalogScreen} 
             options={{ title: 'Catálogo' }} 
+          />
+          <Tab.Screen 
+            name="FavoritesTab" 
+            component={FavoritesScreen} 
+            options={{ title: 'Favoritos' }} 
           />
           <Tab.Screen 
             name="CartTab" 

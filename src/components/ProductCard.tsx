@@ -10,6 +10,8 @@ import {
   Platform
 } from 'react-native';
 import { theme } from '../theme/theme';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../services/AuthContext';
 
 export interface ProductCardProps {
   id: string;
@@ -45,6 +47,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onFavoritePress,
   onAddToCartPress,
 }) => {
+  const navigation = useNavigation<any>();
+  const { userToken } = useAuth();
   const [isFavorite, setIsFavorite] = useState(isFavoriteInitial);
   const heartScale = useRef(new Animated.Value(1)).current;
 
@@ -62,25 +66,36 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   };
 
   const handleFavoriteToggle = () => {
-    const nextFavoriteState = !isFavorite;
-    setIsFavorite(nextFavoriteState);
+    if (userToken) {
+      const nextFavoriteState = !isFavorite;
+      setIsFavorite(nextFavoriteState);
 
-    // Animación de Latido (Pulse/Heartbeat micro-interaction)
-    Animated.sequence([
-      Animated.timing(heartScale, {
-        toValue: 1.4,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-      Animated.spring(heartScale, {
-        toValue: 1,
-        friction: 4,
-        useNativeDriver: true,
-      }),
-    ]).start();
+      // Animación de Latido (Pulse/Heartbeat micro-interaction)
+      Animated.sequence([
+        Animated.timing(heartScale, {
+          toValue: 1.4,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.spring(heartScale, {
+          toValue: 1,
+          friction: 4,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-    if (onFavoritePress) {
-      onFavoritePress(nextFavoriteState);
+      if (onFavoritePress) {
+        onFavoritePress(nextFavoriteState);
+      }
+
+      // Redirigir directo a la pestaña de favoritos
+      navigation.navigate('FavoritesTab');
+    } else {
+      // Pedir que inicie sesión y guardar redirección
+      navigation.navigate('Auth', {
+        screen: 'Login',
+        params: { redirectTo: 'FavoritesTab' }
+      } as any);
     }
   };
 
