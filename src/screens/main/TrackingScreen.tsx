@@ -110,7 +110,9 @@ export default function TrackingScreen() {
       {/* Cabecera */}
       <View style={styles.header}>
         <Text style={styles.headerSubtitle}>SEGUIMIENTO EN TIEMPO REAL</Text>
-        <Text style={styles.orderIdText}>{orderId}</Text>
+        <Text style={styles.orderIdText}>
+          {trackingData?.trackingNumber || (orderId.includes('-') && orderId.length > 15 ? `NE-${orderId.split('-')[0].toUpperCase()}` : orderId)}
+        </Text>
       </View>
 
       {loading ? (

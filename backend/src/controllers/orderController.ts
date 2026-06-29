@@ -243,3 +243,27 @@ export const getOrderTracking = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Ocurrió un error al consultar el tracking del pedido.' });
   }
 };
+
+// 3. Endpoint para obtener la lista de todos los pedidos del usuario autenticado
+export const getUserOrders = async (req: AuthRequest, res: Response) => {
+  try {
+    const usuarioId = req.user?.id;
+    if (!usuarioId) {
+      return res.status(401).json({ error: 'Acceso no autorizado. Por favor, inicia sesión.' });
+    }
+
+    const list = await prisma.ordenes.findMany({
+      where: { usuario_id: usuarioId },
+      include: {
+        envios: true
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    res.status(200).json(list);
+  } catch (error: any) {
+    console.error('[Error en getUserOrders]:', error);
+    res.status(500).json({ error: 'Ocurrió un error al obtener la lista de pedidos.' });
+  }
+};
+
