@@ -9,7 +9,10 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   Alert, 
-  StatusBar 
+  StatusBar,
+  Modal,
+  TextInput,
+  ScrollView
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
@@ -34,6 +37,13 @@ export default function AdminMotorizadosScreen() {
   const [motorizados, setMotorizados] = useState<Motorizado[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Estados para Modal de Edición de Motorizado
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingMotorizado, setEditingMotorizado] = useState<Motorizado | null>(null);
+  const [formTelefono, setFormTelefono] = useState('');
+  const [formPlaca, setFormPlaca] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const fetchMotorizados = async () => {
     try {
       setLoading(true);
@@ -44,6 +54,37 @@ export default function AdminMotorizadosScreen() {
       Alert.alert('Error', 'No se pudieron recuperar los datos de los motorizados.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenEditModal = (motorizado: Motorizado) => {
+    setEditingMotorizado(motorizado);
+    setFormTelefono(motorizado.telefono || '');
+    setFormPlaca(motorizado.placa || '');
+    setModalVisible(true);
+  };
+
+  const handleSaveDetails = async () => {
+    if (!formTelefono || !formPlaca) {
+      Alert.alert('Campos Obligatorios', 'Por favor, completa todos los campos.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiClient.put(`/admin/motorizados/${editingMotorizado?.id}`, {
+        telefono: formTelefono.trim(),
+        placa: formPlaca.trim()
+      }, userToken || undefined);
+
+      Alert.alert('¡Éxito!', 'Los datos del vehículo fueron actualizados.');
+      setModalVisible(false);
+      fetchMotorizados();
+    } catch (error: any) {
+      console.error('[Error al guardar detalles de motorizado]:', error);
+      Alert.alert('Error', error.message || 'No se pudieron actualizar los datos.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -131,9 +172,21 @@ export default function AdminMotorizadosScreen() {
                   <Text style={styles.detailVal}>{item.placa || 'PENDIENTE'}</Text>
                 </View>
               </View>
+
+              <View style={styles.cardActions}>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => handleOpenEditModal(item)}
+                  style={styles.editButton}
+                >
+                  <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
+                  <Text style={styles.editButtonText}>Editar Datos</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
+
       ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="bicycle" size={48} color={theme.colors.border} />
@@ -141,9 +194,72 @@ export default function AdminMotorizadosScreen() {
           <Text style={styles.emptySubtitle}>No hay motorizados registrados en este momento.</Text>
         </View>
       )}
+
+      {/* MODAL: Editar Motorizado (Placa y Teléfono) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Editar Motorizado</Text>
+            <Text style={{ fontFamily: theme.typography.fontFamily.title, fontSize: 13, color: theme.colors.textSecondary, marginBottom: theme.spacing.md, textAlign: 'center' }}>
+              {editingMotorizado?.nombre}
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>Teléfono de Contacto</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formTelefono}
+                onChangeText={setFormTelefono}
+                placeholder="Ej. +51 987 654 321"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              <Text style={styles.formLabel}>Placa del Vehículo</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formPlaca}
+                onChangeText={setFormPlaca}
+                placeholder="Ej. MX-4842"
+                placeholderTextColor={theme.colors.textMuted}
+                autoCapitalize="characters"
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                disabled={submitting}
+                onPress={() => setModalVisible(false)}
+                style={styles.modalCancelButton}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                disabled={submitting}
+                onPress={handleSaveDetails}
+                style={styles.modalSaveButton}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Guardar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -289,4 +405,109 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: theme.typography.lineHeights.bodyMedium,
   },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopColor: theme.colors.border,
+    borderTopWidth: 1,
+    marginTop: theme.spacing.md,
+    paddingTop: 8,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+  },
+  editButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.primary,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    ...theme.shadows.soft,
+  },
+  modalTitle: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: theme.typography.sizes.h2,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+    marginBottom: theme.spacing.xs,
+    textAlign: 'center',
+  },
+  formLabel: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: theme.spacing.md,
+    marginBottom: 4,
+  },
+  formInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surfaceElevated,
+    color: theme.colors.textPrimary,
+    paddingHorizontal: theme.spacing.md,
+    fontSize: theme.typography.sizes.bodyMedium,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  modalCancelButton: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(235, 87, 87, 0.4)',
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: '#EB5757',
+    fontWeight: theme.typography.weights.bold,
+  },
+  modalSaveButton: {
+    flex: 1,
+    height: 44,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: '#000000',
+    fontWeight: theme.typography.weights.bold,
+  },
+
 });

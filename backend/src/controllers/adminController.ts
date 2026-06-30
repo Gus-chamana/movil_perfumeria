@@ -45,21 +45,68 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     const users = await prisma.usuarios.findMany({
       include: {
         datos_personales: true,
-        direcciones: { where: { es_principal: true } }
+        direcciones: { where: { es_principal: true } },
+        motorizados: true
       },
       orderBy: { created_at: 'desc' }
     });
 
-    const formattedUsers = users.map(u => ({
-      id: u.id,
-      email: u.email,
-      rol: u.rol,
-      name: u.datos_personales?.nombre || 'N/A',
-      lastName: u.datos_personales?.apellido_paterno || '',
-      dni: u.datos_personales?.dni || 'N/A',
-      address: u.direcciones?.[0]?.direccion || 'Sin dirección',
-      district: u.direcciones?.[0]?.distrito || ''
-    }));
+    const formattedUsers = [];
+
+    for (const u of users) {
+      let name = u.datos_personales?.nombre || 'N/A';
+      let lastName = u.datos_personales?.apellido_paterno || '';
+      let dni = u.datos_personales?.dni || 'N/A';
+
+      // Auto-curativo: si es motorizado y no tiene datos personales pero tiene nombre en motorizados
+      if (u.rol === 'MOTORIZADO' && u.motorizados) {
+        if (!u.datos_personales || !u.datos_personales.nombre || u.datos_personales.nombre === 'N/A') {
+          const fullName = u.motorizados.nombre.trim();
+          const parts = fullName.split(' ');
+          let parsedName = fullName;
+          let parsedLastName = '';
+          if (parts.length > 1) {
+            parsedLastName = parts.pop() || '';
+            parsedName = parts.join(' ');
+          }
+          name = parsedName;
+          lastName = parsedLastName;
+
+          try {
+            await prisma.datos_personales.upsert({
+              where: { usuario_id: u.id },
+              create: {
+                id: crypto.randomUUID(),
+                usuario_id: u.id,
+                nombre: parsedName,
+                apellido_paterno: parsedLastName,
+                dni: '70000000',
+                updated_at: new Date()
+              },
+              update: {
+                nombre: parsedName,
+                apellido_paterno: parsedLastName,
+                updated_at: new Date()
+              }
+            });
+            console.log(`[Auto-curación] Datos personales creados para motorizado: ${u.email}`);
+          } catch (dbErr) {
+            console.error(`[Error Auto-curación para ${u.email}]:`, dbErr);
+          }
+        }
+      }
+
+      formattedUsers.push({
+        id: u.id,
+        email: u.email,
+        rol: u.rol,
+        name,
+        lastName,
+        dni,
+        address: u.direcciones?.[0]?.direccion || 'Sin dirección',
+        district: u.direcciones?.[0]?.distrito || ''
+      });
+    }
 
     res.status(200).json(formattedUsers);
   } catch (error) {
@@ -87,20 +134,38 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
       });
 
       // B. Lógica especial de sincronización:
-      // Si cambia a MOTORIZADO, asegurar que exista el registro en la tabla 'motorizados'
       if (newRole === 'MOTORIZADO') {
+        let userDetails = await tx.datos_personales.findUnique({ where: { usuario_id: id } });
+        if (!userDetails) {
+          userDetails = await tx.datos_personales.create({
+            data: {
+              id: crypto.randomUUID(),
+              usuario_id: id,
+              nombre: 'Nuevo',
+              apellido_paterno: 'Motorizado',
+              dni: '70000000',
+              updated_at: new Date()
+            }
+          });
+        }
+
         const motorizadoExiste = await tx.motorizados.findUnique({ where: { id } });
         if (!motorizadoExiste) {
-          const userDetails = await tx.datos_personales.findUnique({ where: { usuario_id: id } });
-          const nombreMotorizado = userDetails ? `${userDetails.nombre} ${userDetails.apellido_paterno}` : 'Nuevo Motorizado';
-          
           await tx.motorizados.create({
             data: {
               id: id,
-              nombre: nombreMotorizado,
+              nombre: `${userDetails.nombre} ${userDetails.apellido_paterno}`.trim(),
               telefono: '+51 900 000 000',
               placa_vehiculo: 'PENDIENTE',
               activo: true,
+              updated_at: new Date()
+            }
+          });
+        } else {
+          await tx.motorizados.update({
+            where: { id },
+            data: {
+              nombre: `${userDetails.nombre} ${userDetails.apellido_paterno}`.trim(),
               updated_at: new Date()
             }
           });
@@ -156,23 +221,31 @@ export const getMotorizadosList = async (req: AuthRequest, res: Response) => {
   try {
     const motorizados = await prisma.motorizados.findMany({
       include: {
-        usuarios: true
+        usuarios: {
+          include: {
+            datos_personales: true
+          }
+        }
       }
     });
 
-    const list = motorizados.map(m => ({
-      id: m.id,
-      nombre: m.nombre,
-      telefono: m.telefono,
-      placa: m.placa_vehiculo,
-      activo: m.activo,
-      email: m.usuarios?.email || 'N/A'
-    }));
+    const list = motorizados.map(m => {
+      const userDetails = m.usuarios?.datos_personales;
+      const nombre = userDetails ? `${userDetails.nombre} ${userDetails.apellido_paterno}`.trim() : m.nombre;
+      return {
+        id: m.id,
+        nombre: nombre || 'Nuevo Motorizado',
+        telefono: m.telefono,
+        placa: m.placa_vehiculo,
+        activo: m.activo,
+        email: m.usuarios?.email || 'N/A'
+      };
+    });
 
     res.status(200).json(list);
   } catch (error) {
     console.error('[Error en getMotorizadosList]:', error);
-    res.status(500).json({ error: 'Ocurrió un error al recuperar los motorizados.' });
+    res.status(500).json({ error: 'Ocurrió un error al obtener la lista de motorizados.' });
   }
 };
 
@@ -553,4 +626,31 @@ export const updateAdminUser = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: error.message || 'Ocurrió un error al actualizar los datos del usuario.' });
   }
 };
+
+// 11. Cambiar los detalles (Placa y Teléfono) de un Motorizado
+export const updateMotorizadoDetails = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { telefono, placa } = req.body;
+
+    if (!telefono || !placa) {
+      return res.status(400).json({ error: 'El teléfono y la placa del vehículo son obligatorios.' });
+    }
+
+    await prisma.motorizados.update({
+      where: { id },
+      data: {
+        telefono: telefono.trim(),
+        placa_vehiculo: placa.trim().toUpperCase(),
+        updated_at: new Date()
+      }
+    });
+
+    res.status(200).json({ message: 'Los datos del motorizado fueron actualizados correctamente.' });
+  } catch (error) {
+    console.error('[Error en updateMotorizadoDetails]:', error);
+    res.status(500).json({ error: 'Ocurrió un error al actualizar los datos del motorizado.' });
+  }
+};
+
 
