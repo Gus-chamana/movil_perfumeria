@@ -219,7 +219,41 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 // 5. Obtener lista de Motorizados para Administración
 export const getMotorizadosList = async (req: AuthRequest, res: Response) => {
   try {
+    // 1. Obtener y limpiar de forma automática motorizados que ya no tienen el rol de MOTORIZADO (Auto-curativo)
+    const invalidMotorizados = await prisma.motorizados.findMany({
+      where: {
+        usuarios: {
+          rol: { not: 'MOTORIZADO' }
+        }
+      }
+    });
+
+    if (invalidMotorizados.length > 0) {
+      console.log(`🧹 Limpiando ${invalidMotorizados.length} registros huérfanos de la tabla 'motorizados'...`);
+      for (const m of invalidMotorizados) {
+        try {
+          await prisma.$transaction(async (tx) => {
+            await tx.envios.updateMany({
+              where: { motorizado_id: m.id },
+              data: { motorizado_id: null }
+            });
+            await tx.motorizados.delete({
+              where: { id: m.id }
+            });
+          });
+        } catch (cleanupErr) {
+          console.error(`[Error al limpiar motorizado huérfano ${m.id}]:`, cleanupErr);
+        }
+      }
+    }
+
+    // 2. Obtener lista final filtrada por usuarios activos con rol MOTORIZADO
     const motorizados = await prisma.motorizados.findMany({
+      where: {
+        usuarios: {
+          rol: 'MOTORIZADO'
+        }
+      },
       include: {
         usuarios: {
           include: {
@@ -615,6 +649,18 @@ export const updateAdminUser = async (req: AuthRequest, res: Response) => {
               nombre: `${name.trim()} ${lastName.trim()}`,
               updated_at: new Date()
             }
+          });
+        }
+      } else {
+        // Si deja de ser MOTORIZADO, eliminarlo de la tabla de motorizados (desvinculando envíos primero)
+        const motorizadoExiste = await tx.motorizados.findUnique({ where: { id } });
+        if (motorizadoExiste) {
+          await tx.envios.updateMany({
+            where: { motorizado_id: id },
+            data: { motorizado_id: null }
+          });
+          await tx.motorizados.delete({
+            where: { id }
           });
         }
       }
