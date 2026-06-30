@@ -1,20 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
   View, 
   SafeAreaView, 
-  StatusBar 
+  StatusBar,
+  FlatList
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
 import { LuxuryButton } from '../../components/LuxuryButton';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { ProductCard } from '../../components/ProductCard';
+import { favoritesService } from '../../services/favoritesService';
+import { cartService } from '../../services/cartService';
+import { Product } from '../../assets/productsData';
 
 export default function FavoritesScreen() {
   const navigation = useNavigation<any>();
   const { userToken } = useAuth();
+  const [favoriteItems, setFavoriteItems] = useState<Product[]>([]);
+
+  useEffect(() => {
+    if (userToken) {
+      const unsubscribe = favoritesService.subscribe((items) => {
+        setFavoriteItems(items);
+      });
+      return unsubscribe;
+    }
+  }, [userToken]);
 
   // 1. Vista si el usuario NO ha iniciado sesión (Bloqueo elegante)
   if (!userToken) {
@@ -58,19 +73,44 @@ export default function FavoritesScreen() {
         <Text style={styles.headerSubtitle}>Tu selección exclusiva</Text>
       </View>
 
-      {/* Estado Vacío */}
-      <View style={styles.emptyContainer}>
-        <Ionicons name="flask-outline" size={64} color={theme.colors.border} style={styles.emptyIcon} />
-        <Text style={styles.emptyTitle}>Sin Preferidos</Text>
-        <Text style={styles.emptySubtitle}>
-          Aún no has añadido fragancias a tu colección personal de favoritos.
-        </Text>
-        <LuxuryButton
-          title="Explorar Esencias"
-          onPress={() => navigation.navigate('CatalogTab')}
-          style={styles.exploreButton}
+      {/* Grilla de Favoritos Dinámica o Estado Vacío */}
+      {favoriteItems.length > 0 ? (
+        <FlatList
+          data={favoriteItems}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          contentContainerStyle={styles.gridContainer}
+          columnWrapperStyle={styles.gridRow}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <ProductCard
+              id={item.id}
+              brand={item.brand}
+              name={item.name}
+              price={item.price}
+              imageUrl={item.imageUrl}
+              isNew={item.isNew}
+              isFavoriteInitial={true}
+              onPress={() => console.log(`Detalle: ${item.name}`)}
+              onAddToCartPress={() => cartService.addToCart(item)}
+            />
+          )}
         />
-      </View>
+      ) : (
+        /* Estado Vacío */
+        <View style={styles.emptyContainer}>
+          <Ionicons name="flask-outline" size={64} color={theme.colors.border} style={styles.emptyIcon} />
+          <Text style={styles.emptyTitle}>Sin Preferidos</Text>
+          <Text style={styles.emptySubtitle}>
+            Aún no has añadido fragancias a tu colección personal de favoritos.
+          </Text>
+          <LuxuryButton
+            title="Explorar Esencias"
+            onPress={() => navigation.navigate('CatalogTab')}
+            style={styles.exploreButton}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -166,5 +206,13 @@ const styles = StyleSheet.create({
   },
   exploreButton: {
     width: '80%',
+  },
+  gridContainer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxxl,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
   },
 });

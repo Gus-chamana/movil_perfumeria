@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -12,6 +12,7 @@ import {
 import { theme } from '../theme/theme';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../services/AuthContext';
+import { favoritesService } from '../services/favoritesService';
 
 export interface ProductCardProps {
   id: string;
@@ -37,6 +38,7 @@ const CARD_WIDTH = (width - theme.spacing.lg * 2 - theme.spacing.md) / 2;
  * táctil (animación de escala estilo latido de corazón).
  */
 export const ProductCard: React.FC<ProductCardProps> = ({
+  id,
   brand,
   name,
   price,
@@ -51,6 +53,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const { userToken } = useAuth();
   const [isFavorite, setIsFavorite] = useState(isFavoriteInitial);
   const heartScale = useRef(new Animated.Value(1)).current;
+
+  // Sincronizar el estado del corazón reactivamente con el servicio global de favoritos
+  useEffect(() => {
+    const unsubscribe = favoritesService.subscribe(() => {
+      setIsFavorite(favoritesService.isFavorite(id));
+    });
+    return unsubscribe;
+  }, [id]);
 
   // Manejo de Añadir al Carrito Directo (+) evitando propagación de clic
   const handleAddToCart = (e: any) => {
@@ -69,6 +79,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     if (userToken) {
       const nextFavoriteState = !isFavorite;
       setIsFavorite(nextFavoriteState);
+
+      // Reconstruir el objeto de producto parcial para pasarlo al servicio
+      const product = {
+        id,
+        brand,
+        name,
+        price,
+        imageUrl,
+        isNew,
+        category: 'Orientales',
+        gender: 'unisex',
+        size: '100ml',
+        concentration: 'Parfum',
+        description: ''
+      } as any;
+
+      // Alternar favoritos en el almacén de datos global reactivo
+      favoritesService.toggleFavorite(product);
 
       // Animación de Latido (Pulse/Heartbeat micro-interaction)
       Animated.sequence([

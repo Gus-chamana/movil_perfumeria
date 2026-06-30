@@ -18,7 +18,7 @@ import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
 import { apiClient } from '../../services/api';
 import { LuxuryButton } from '../../components/LuxuryButton';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
@@ -28,6 +28,33 @@ export default function ProfileScreen() {
   // Estados del Formulario
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
+  
+  // Estados para Historial de Pedidos
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // Función para obtener las órdenes reales desde Supabase
+  const fetchOrders = async () => {
+    if (!userToken) return;
+    try {
+      setLoadingOrders(true);
+      const data = await apiClient.get('/orders', userToken);
+      if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error('[Error al obtener pedidos]:', error);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  // Recargar al enfocar la pantalla para sincronizar en tiempo real tras una compra
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchOrders();
+    }, [userToken])
+  );
   const [dni, setDni] = useState('');
   const [address, setAddress] = useState('');
   const [district, setDistrict] = useState('');
@@ -179,7 +206,92 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* 3. Formulario de Configuración (Estilo minimalista oro-negro) */}
+          {/* 3. Sección: Mis Compras & Seguimiento (UX Premium) */}
+          <View style={styles.ordersSection}>
+            <Text style={styles.sectionTitle}>Mis Compras & Seguimiento</Text>
+            
+            {loadingOrders ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: theme.spacing.md }} />
+            ) : orders.length > 0 ? (
+              orders.map((order) => {
+                const trackingNumber = order.envios?.numero_tracking || `NE-${order.id.slice(0, 6).toUpperCase()}`;
+                const status = order.envios?.estado_actual || order.estado;
+                
+                // Formatear fecha
+                const dateStr = new Date(order.created_at).toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                });
+
+                // Determinar estilos y texto del badge de estado
+                let badgeColor = '#E6C15C'; // Dorado por defecto
+                let badgeBg = 'rgba(230, 193, 92, 0.1)';
+                let statusLabel = 'CREADO';
+
+                if (status === 'PREPARANDO') {
+                  statusLabel = 'PREPARANDO';
+                  badgeColor = '#E6C15C';
+                  badgeBg = 'rgba(230, 193, 92, 0.15)';
+                } else if (status === 'EN_RUTA') {
+                  statusLabel = 'EN RUTA';
+                  badgeColor = '#FF9900';
+                  badgeBg = 'rgba(255, 153, 0, 0.15)';
+                } else if (status === 'ENTREGADO') {
+                  statusLabel = 'ENTREGADO';
+                  badgeColor = '#10B981'; // Verde
+                  badgeBg = 'rgba(16, 185, 129, 0.15)';
+                }
+
+                return (
+                  <View key={order.id} style={styles.orderCard}>
+                    <View style={styles.orderCardHeader}>
+                      <View>
+                        <Text style={styles.orderTrackingText}>{trackingNumber}</Text>
+                        <Text style={styles.orderDateText}>{dateStr}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: badgeBg, borderColor: badgeColor }]}>
+                        <Text style={[styles.statusBadgeText, { color: badgeColor }]}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.orderCardDivider} />
+                    
+                    <View style={styles.orderCardFooter}>
+                      <Text style={styles.orderPriceText}>
+                        Total: <Text style={styles.orderPriceValue}>S/ {Number(order.precio_total).toFixed(2)}</Text>
+                      </Text>
+                      
+                      <TouchableOpacity 
+                        activeOpacity={0.8}
+                        onPress={() => navigation.navigate('Tracking', { orderId: order.id })}
+                        style={styles.trackButton}
+                      >
+                        <Ionicons name="map-outline" size={14} color={theme.colors.primary} />
+                        <Text style={styles.trackButtonText}>Rastrear Envío</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyOrdersCard}>
+                <Ionicons name="bag-handle-outline" size={24} color={theme.colors.textMuted} />
+                <Text style={styles.emptyOrdersText}>Aún no tienes pedidos registrados.</Text>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('Main', { screen: 'CatalogTab' })}
+                  style={styles.exploreTextButton}
+                >
+                  <Text style={styles.exploreButtonText}>Explorar Colección de Lujo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* 4. Formulario de Configuración (Estilo minimalista oro-negro) */}
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Datos Personales</Text>
 
@@ -509,5 +621,111 @@ const styles = StyleSheet.create({
   },
   loginPromptButton: {
     width: '100%',
+  },
+  ordersSection: {
+    paddingHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
+  },
+  orderCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    ...theme.shadows.soft,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  orderTrackingText: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: theme.typography.sizes.bodyLarge,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+  },
+  orderDateText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+  },
+  statusBadgeText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.5,
+  },
+  orderCardDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: theme.spacing.sm,
+  },
+  orderCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  orderPriceText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.textSecondary,
+  },
+  orderPriceValue: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyLarge,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  trackButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weights.bold,
+  },
+  emptyOrdersCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyOrdersText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  exploreTextButton: {
+    paddingVertical: theme.spacing.xs,
+  },
+  exploreButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weights.bold,
+    textDecorationLine: 'underline',
   },
 });

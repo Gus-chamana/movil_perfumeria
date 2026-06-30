@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/navigation';
 import { useAuth } from '../../services/AuthContext';
 import { apiClient } from '../../services/api';
+import { cartService } from '../../services/cartService';
 
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
 
@@ -108,14 +109,28 @@ export default function CheckoutScreen() {
       }
     }
 
-    // Carrito de compras real basado en variantes existentes para evitar fallas relacionales en Supabase
-    const cartData = [
-      {
-        variantId: 'var-oud-100ml-parfum', // Variante del perfume "All Black" que sembramos
-        quantity: 1,
-        price: 320.00
-      }
-    ];
+    // 1. Obtener los productos reales agregados al carrito desde Supabase
+    const cartItems = cartService.getCart();
+
+    // 2. Validar que el carrito no esté vacío
+    if (cartItems.length === 0) {
+      setPaymentError('Tu carrito está vacío. Agrega productos al carrito antes de pagar.');
+      return;
+    }
+
+    // 3. Mapear los productos reales con sus variantes de Supabase
+    const cartData = cartItems.map((item) => {
+      const productAny = item.product as any;
+      const firstVariant = productAny.variants && productAny.variants.length > 0 
+        ? productAny.variants[0] 
+        : null;
+
+      return {
+        variantId: firstVariant ? firstVariant.id : item.product.id,
+        quantity: item.quantity,
+        price: firstVariant ? firstVariant.price : item.product.price
+      };
+    });
 
     setLoading(true);
     try {
@@ -131,7 +146,8 @@ export default function CheckoutScreen() {
         userToken || undefined
       );
 
-      // Redirigir directamente a la pantalla de Tracking pasando el ID de orden real
+      // Redirigir directamente a la pantalla de Tracking vaciando el carrito local
+      cartService.clearCart();
       navigation.replace('Tracking', { orderId: data.orderId });
     } catch (error: any) {
       setPaymentError(error.message || 'Ocurrió un error al procesar tu compra.');
