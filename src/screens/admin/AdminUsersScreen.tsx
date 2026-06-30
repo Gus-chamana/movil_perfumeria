@@ -260,8 +260,10 @@ export default function AdminUsersScreen() {
           contentContainerStyle={styles.listContainer}
           renderItem={({ item }) => {
             const isProcessing = actionId === item.id;
+            const isCurrentUser = !!(item.id === userProfile?.id || 
+              (item.email && userProfile?.email && item.email.toLowerCase() === userProfile.email.toLowerCase()));
             return (
-              <View style={styles.userCard}>
+              <View style={[styles.userCard, isCurrentUser && styles.activeUserCard]}>
                 <View style={styles.cardTop}>
                   <View style={styles.avatarMini}>
                     <Text style={styles.avatarMiniText}>
@@ -271,7 +273,7 @@ export default function AdminUsersScreen() {
                   <View style={styles.userInfo}>
                     <Text numberOfLines={1} style={styles.userName}>
                       {item.name} {item.lastName}
-                      {item.id === userProfile?.id && <Text style={styles.currentUserLabel}> (Tú)</Text>}
+                      {isCurrentUser && <Text style={styles.currentUserLabel}> (Sesión Activa)</Text>}
                     </Text>
                     <Text numberOfLines={1} style={styles.userEmail}>{item.email}</Text>
                   </View>
@@ -322,7 +324,7 @@ export default function AdminUsersScreen() {
                     <Text style={styles.editButtonText}>Editar</Text>
                   </TouchableOpacity>
 
-                  {item.id !== userProfile?.id && (
+                  {!isCurrentUser && (
                     <TouchableOpacity 
                       activeOpacity={0.7}
                       disabled={isProcessing}
@@ -432,45 +434,54 @@ export default function AdminUsersScreen() {
               />
 
               <Text style={styles.formLabel}>Rol / Categoría</Text>
-              <View style={[styles.roleSelectorRow, editingUser?.id === userProfile?.id && { opacity: 0.5 }]}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={editingUser?.id === userProfile?.id}
-                  onPress={() => setFormRole('CLIENTE')}
-                  style={[styles.roleOptionChip, formRole === 'CLIENTE' && styles.roleOptionActive]}
-                >
-                  <Text style={[styles.roleOptionText, formRole === 'CLIENTE' && styles.roleOptionTextActive]}>
-                    CLIENTE
-                  </Text>
-                </TouchableOpacity>
+              {(() => {
+                const isEditingSelf = !!(editingUser && (editingUser.id === userProfile?.id || 
+                  (editingUser.email && userProfile?.email && editingUser.email.toLowerCase() === userProfile.email.toLowerCase())));
+                return (
+                  <>
+                    <View style={[styles.roleSelectorRow, isEditingSelf && { opacity: 0.5 }]}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        disabled={isEditingSelf}
+                        onPress={() => setFormRole('CLIENTE')}
+                        style={[styles.roleOptionChip, formRole === 'CLIENTE' && styles.roleOptionActive]}
+                      >
+                        <Text style={[styles.roleOptionText, formRole === 'CLIENTE' && styles.roleOptionTextActive]}>
+                          CLIENTE
+                        </Text>
+                      </TouchableOpacity>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={editingUser?.id === userProfile?.id}
-                  onPress={() => setFormRole('MOTORIZADO')}
-                  style={[styles.roleOptionChip, formRole === 'MOTORIZADO' && styles.roleOptionActive]}
-                >
-                  <Text style={[styles.roleOptionText, formRole === 'MOTORIZADO' && styles.roleOptionTextActive]}>
-                    MOTORIZADO
-                  </Text>
-                </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        disabled={isEditingSelf}
+                        onPress={() => setFormRole('MOTORIZADO')}
+                        style={[styles.roleOptionChip, formRole === 'MOTORIZADO' && styles.roleOptionActive]}
+                      >
+                        <Text style={[styles.roleOptionText, formRole === 'MOTORIZADO' && styles.roleOptionTextActive]}>
+                          MOTORIZADO
+                        </Text>
+                      </TouchableOpacity>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={editingUser?.id === userProfile?.id}
-                  onPress={() => setFormRole('ADMIN')}
-                  style={[styles.roleOptionChip, formRole === 'ADMIN' && styles.roleOptionActive]}
-                >
-                  <Text style={[styles.roleOptionText, formRole === 'ADMIN' && styles.roleOptionTextActive]}>
-                    ADMIN
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {editingUser?.id === userProfile?.id && (
-                <Text style={{ fontSize: 9, color: theme.colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>
-                  * No puedes modificar tu propio rol de administrador.
-                </Text>
-              )}
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        disabled={isEditingSelf}
+                        onPress={() => setFormRole('ADMIN')}
+                        style={[styles.roleOptionChip, formRole === 'ADMIN' && styles.roleOptionActive]}
+                      >
+                        <Text style={[styles.roleOptionText, formRole === 'ADMIN' && styles.roleOptionTextActive]}>
+                          ADMIN
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {isEditingSelf && (
+                      <Text style={{ fontSize: 9, color: theme.colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>
+                        * No puedes modificar tu propio rol de administrador.
+                      </Text>
+                    )}
+                  </>
+                );
+              })()}
+
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -872,4 +883,10 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.weights.bold,
     fontStyle: 'italic',
   },
+  activeUserCard: {
+    borderColor: theme.colors.primary,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(212, 175, 55, 0.04)',
+  },
 });
+
