@@ -23,3 +23,5 @@ backend/.env
 # archivos del sistema
 .DS_Store
 Thumbs.db
+
+.idea/
