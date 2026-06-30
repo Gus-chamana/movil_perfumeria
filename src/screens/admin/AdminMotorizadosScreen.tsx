@@ -14,8 +14,9 @@ import {
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
 import { apiClient } from '../../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+
 
 interface Motorizado {
   id: string;
@@ -63,9 +64,11 @@ export default function AdminMotorizadosScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchMotorizados();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchMotorizados();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>

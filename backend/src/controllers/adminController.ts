@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import prisma from '../config/db';
 import { AuthRequest } from '../middleware/authMiddleware';
 
@@ -352,3 +353,204 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: error.message || 'Ocurrió un error al registrar el nuevo producto.' });
   }
 };
+
+// 9. Registrar un Nuevo Usuario desde el panel de administración
+export const createAdminUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, password, name, lastName, dni, address, district, role } = req.body;
+
+    if (!email || !password || !name || !lastName || !dni || !address || !district || !role) {
+      return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+    }
+
+    // Verificar si el correo ya existe
+    const userExists = await prisma.usuarios.findUnique({ where: { email } });
+    if (userExists) {
+      return res.status(400).json({ error: 'El correo electrónico ya se encuentra registrado.' });
+    }
+
+    // Encriptar contraseña
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(password, salt);
+
+    const usuarioId = crypto.randomUUID();
+    const datosPersonalesId = crypto.randomUUID();
+    const direccionId = crypto.randomUUID();
+
+    await prisma.$transaction(async (tx) => {
+      // A. Crear registro en 'usuarios'
+      await tx.usuarios.create({
+        data: {
+          id: usuarioId,
+          email,
+          password: hashedPassword,
+          rol: role,
+          updated_at: new Date()
+        }
+      });
+
+      // B. Crear registro en 'datos_personales'
+      await tx.datos_personales.create({
+        data: {
+          id: datosPersonalesId,
+          usuario_id: usuarioId,
+          nombre: name.trim(),
+          apellido_paterno: lastName.trim(),
+          dni: dni.trim(),
+          updated_at: new Date()
+        }
+      });
+
+      // C. Crear registro en 'direcciones'
+      await tx.direcciones.create({
+        data: {
+          id: direccionId,
+          usuario_id: usuarioId,
+          direccion: address.trim(),
+          departamento: 'Lima',
+          provincia: 'Lima',
+          distrito: district.trim(),
+          referencia: 'Registrado por Administrador',
+          es_principal: true,
+          updated_at: new Date()
+        }
+      });
+
+      // D. Si es motorizado, crear registro en 'motorizados'
+      if (role === 'MOTORIZADO') {
+        await tx.motorizados.create({
+          data: {
+            id: usuarioId,
+            nombre: `${name.trim()} ${lastName.trim()}`,
+            telefono: '+51 900 000 000',
+            placa_vehiculo: 'PENDIENTE',
+            activo: true,
+            updated_at: new Date()
+          }
+        });
+      }
+    });
+
+    res.status(201).json({ message: 'Usuario registrado con éxito absoluto.' });
+  } catch (error: any) {
+    console.error('[Error en createAdminUser]:', error);
+    res.status(500).json({ error: error.message || 'Ocurrió un error al registrar el nuevo usuario.' });
+  }
+};
+
+// 10. Modificar datos completos de un Usuario desde el panel
+export const updateAdminUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { email, password, name, lastName, dni, address, district, role } = req.body;
+
+    if (!email || !name || !lastName || !dni || !address || !district || !role) {
+      return res.status(400).json({ error: 'Todos los campos excepto la contraseña son obligatorios.' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.usuarios.findUnique({ where: { id } });
+      if (!currentUser) {
+        throw new Error('El usuario solicitado no existe.');
+      }
+
+      const userUpdateData: any = {
+        email,
+        rol: role,
+        updated_at: new Date()
+      };
+
+      if (password && password.trim() !== '') {
+        const salt = bcrypt.genSaltSync(10);
+        userUpdateData.password = bcrypt.hashSync(password, salt);
+      }
+
+      // A. Actualizar usuarios
+      await tx.usuarios.update({
+        where: { id },
+        data: userUpdateData
+      });
+
+      // B. Actualizar o crear datos personales
+      await tx.datos_personales.upsert({
+        where: { usuario_id: id },
+        create: {
+          id: crypto.randomUUID(),
+          usuario_id: id,
+          nombre: name.trim(),
+          apellido_paterno: lastName.trim(),
+          dni: dni.trim(),
+          updated_at: new Date()
+        },
+        update: {
+          nombre: name.trim(),
+          apellido_paterno: lastName.trim(),
+          dni: dni.trim(),
+          updated_at: new Date()
+        }
+      });
+
+      // C. Actualizar o crear dirección principal
+      const principalDir = await tx.direcciones.findFirst({
+        where: { usuario_id: id, es_principal: true }
+      });
+
+      if (principalDir) {
+        await tx.direcciones.update({
+          where: { id: principalDir.id },
+          data: {
+            direccion: address.trim(),
+            distrito: district.trim(),
+            updated_at: new Date()
+          }
+        });
+      } else {
+        await tx.direcciones.create({
+          data: {
+            id: crypto.randomUUID(),
+            usuario_id: id,
+            direccion: address.trim(),
+            departamento: 'Lima',
+            provincia: 'Lima',
+            distrito: district.trim(),
+            referencia: 'Dirección principal registrada por administrador',
+            es_principal: true,
+            updated_at: new Date()
+          }
+        });
+      }
+
+      // D. Sincronizar tabla motorizados:
+      if (role === 'MOTORIZADO') {
+        const motorizadoExiste = await tx.motorizados.findUnique({ where: { id } });
+        if (!motorizadoExiste) {
+          await tx.motorizados.create({
+            data: {
+              id: id,
+              nombre: `${name.trim()} ${lastName.trim()}`,
+              telefono: '+51 900 000 000',
+              placa_vehiculo: 'PENDIENTE',
+              activo: true,
+              updated_at: new Date()
+            }
+          });
+        } else {
+          // Actualizar nombre si cambió
+          await tx.motorizados.update({
+            where: { id },
+            data: {
+              nombre: `${name.trim()} ${lastName.trim()}`,
+              updated_at: new Date()
+            }
+          });
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Los datos del usuario fueron actualizados correctamente.' });
+  } catch (error: any) {
+    console.error('[Error en updateAdminUser]:', error);
+    res.status(500).json({ error: error.message || 'Ocurrió un error al actualizar los datos del usuario.' });
+  }
+};
+

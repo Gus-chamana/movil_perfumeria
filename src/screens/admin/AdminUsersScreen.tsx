@@ -8,12 +8,15 @@ import {
   TouchableOpacity, 
   ActivityIndicator, 
   Alert, 
-  StatusBar 
+  StatusBar,
+  Modal,
+  TextInput,
+  ScrollView
 } from 'react-native';
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
 import { apiClient } from '../../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface User {
@@ -53,6 +56,21 @@ export default function AdminUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
 
+  // Estados para Modal de Crear/Editar
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  // Campos del Formulario
+  const [formEmail, setFormEmail] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formLastName, setFormLastName] = useState('');
+  const [formDni, setFormDni] = useState('');
+  const [formAddress, setFormAddress] = useState('');
+  const [formDistrict, setFormDistrict] = useState('');
+  const [formRole, setFormRole] = useState<'ADMIN' | 'CLIENTE' | 'MOTORIZADO'>('CLIENTE');
+  const [submitting, setSubmitting] = useState(false);
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -66,43 +84,82 @@ export default function AdminUsersScreen() {
     }
   };
 
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setFormEmail('');
+    setFormPassword('');
+    setFormName('');
+    setFormLastName('');
+    setFormDni('');
+    setFormAddress('');
+    setFormDistrict('');
+    setFormRole('CLIENTE');
+    setModalVisible(true);
+  };
+
+  const handleOpenEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormEmail(user.email);
+    setFormPassword('');
+    setFormName(user.name);
+    setFormLastName(user.lastName);
+    setFormDni(user.dni);
+    setFormAddress(user.address);
+    setFormDistrict(user.district);
+    setFormRole(user.rol);
+    setModalVisible(true);
+  };
+
   const handleChangeRole = (userId: string, currentRole: string) => {
-    // Evitar que el administrador se cambie su propio rol
     if (userId === userProfile?.id) {
       Alert.alert('Acción Denegada', 'No puedes modificar tu propia categoría de administrador.');
       return;
     }
-
-    Alert.alert(
-      'Modificar Categoría',
-      `Selecciona el nuevo rol para este usuario (Rol actual: ${currentRole})`,
-      [
-        { text: 'Cliente (CLIENTE)', onPress: () => processRoleChange(userId, 'CLIENTE') },
-        { text: 'Administrador (ADMIN)', onPress: () => processRoleChange(userId, 'ADMIN') },
-        { text: 'Motorizado (MOTORIZADO)', onPress: () => processRoleChange(userId, 'MOTORIZADO') },
-        { text: 'Cancelar', style: 'cancel' }
-      ]
-    );
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      handleOpenEditModal(user);
+    }
   };
 
-  const processRoleChange = async (userId: string, targetRole: 'ADMIN' | 'CLIENTE' | 'MOTORIZADO') => {
-    // Actualización optimista
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, rol: targetRole } : u));
+  const handleSaveUser = async () => {
+    if (!formEmail || !formName || !formLastName || !formDni || !formAddress || !formDistrict || !formRole) {
+      Alert.alert('Campos Obligatorios', 'Por favor, completa todos los campos del formulario.');
+      return;
+    }
 
+    if (!editingUser && !formPassword) {
+      Alert.alert('Contraseña Requerida', 'Por favor, introduce una contraseña para el nuevo usuario.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      setActionId(userId);
-      console.log(`🔌 Cambiando rol de usuario ${userId} a ${targetRole}...`);
-      await apiClient.put(`/admin/users/${userId}/role`, { newRole: targetRole }, userToken || undefined);
-      
-      Alert.alert('¡Éxito!', `El usuario ahora tiene el rol de ${targetRole}.`);
-    } catch (error: any) {
-      console.error('[Error al cambiar rol]:', error);
-      Alert.alert('Error', error.message || 'No se pudo actualizar el rol.');
-      
-      // Revertir cambio si falla
+      const payload = {
+        email: formEmail.trim(),
+        password: formPassword ? formPassword : undefined,
+        name: formName.trim(),
+        lastName: formLastName.trim(),
+        dni: formDni.trim(),
+        address: formAddress.trim(),
+        district: formDistrict.trim(),
+        role: formRole
+      };
+
+      if (editingUser) {
+        await apiClient.put(`/admin/users/${editingUser.id}`, payload, userToken || undefined);
+        Alert.alert('¡Éxito!', 'Los datos del usuario fueron actualizados correctamente.');
+      } else {
+        await apiClient.post('/admin/users', payload, userToken || undefined);
+        Alert.alert('¡Éxito!', 'El nuevo usuario fue registrado correctamente.');
+      }
+
+      setModalVisible(false);
       fetchUsers();
+    } catch (error: any) {
+      console.error('[Error al guardar usuario]:', error);
+      Alert.alert('Error al Guardar', error.message || 'No se pudo guardar el usuario.');
     } finally {
-      setActionId(null);
+      setSubmitting(false);
     }
   };
 
@@ -148,9 +205,11 @@ export default function AdminUsersScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUsers();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -171,6 +230,15 @@ export default function AdminUsersScreen() {
           <Text style={styles.headerTitle}>Gobernanza</Text>
           <Text style={styles.headerSubtitle}>Gestión de usuarios y accesos</Text>
         </View>
+        <TouchableOpacity 
+          activeOpacity={0.7} 
+          onPress={handleOpenCreateModal}
+          style={styles.headerCreateButton}
+        >
+          <Ionicons name="person-add-outline" size={14} color="#000000" />
+          <Text style={styles.headerCreateButtonText}>Crear</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity 
           activeOpacity={0.7} 
           onPress={handleLogout}
@@ -203,6 +271,7 @@ export default function AdminUsersScreen() {
                   <View style={styles.userInfo}>
                     <Text numberOfLines={1} style={styles.userName}>
                       {item.name} {item.lastName}
+                      {item.id === userProfile?.id && <Text style={styles.currentUserLabel}> (Tú)</Text>}
                     </Text>
                     <Text numberOfLines={1} style={styles.userEmail}>{item.email}</Text>
                   </View>
@@ -211,9 +280,7 @@ export default function AdminUsersScreen() {
                     <ActivityIndicator size="small" color={theme.colors.primary} />
                   ) : (
                     <View style={styles.badgeCol}>
-                      <TouchableOpacity 
-                        activeOpacity={0.8}
-                        onPress={() => handleChangeRole(item.id, item.rol)}
+                      <View 
                         style={[
                           styles.roleBadge,
                           item.rol === 'ADMIN' ? styles.badgeAdmin : item.rol === 'MOTORIZADO' ? styles.badgeMoto : styles.badgeClient
@@ -223,9 +290,9 @@ export default function AdminUsersScreen() {
                           styles.roleBadgeText,
                           item.rol === 'ADMIN' ? styles.badgeAdminText : item.rol === 'MOTORIZADO' ? styles.badgeMotoText : styles.badgeClientText
                         ]}>
-                          {item.rol} ⚙️
+                          {item.rol}
                         </Text>
-                      </TouchableOpacity>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -245,8 +312,17 @@ export default function AdminUsersScreen() {
                   </View>
                 </View>
 
-                {item.id !== userProfile?.id && (
-                  <View style={styles.cardActions}>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity 
+                    activeOpacity={0.7}
+                    onPress={() => handleOpenEditModal(item)}
+                    style={styles.editButton}
+                  >
+                    <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
+                    <Text style={styles.editButtonText}>Editar</Text>
+                  </TouchableOpacity>
+
+                  {item.id !== userProfile?.id && (
                     <TouchableOpacity 
                       activeOpacity={0.7}
                       disabled={isProcessing}
@@ -256,8 +332,8 @@ export default function AdminUsersScreen() {
                       <Ionicons name="trash-outline" size={14} color="#EB5757" />
                       <Text style={styles.deleteButtonText}>Eliminar Usuario</Text>
                     </TouchableOpacity>
-                  </View>
-                )}
+                  )}
+                </View>
               </View>
             );
           }}
@@ -269,6 +345,160 @@ export default function AdminUsersScreen() {
           <Text style={styles.emptySubtitle}>No se encontraron usuarios.</Text>
         </View>
       )}
+
+      {/* MODAL: Crear/Editar Usuario (UX Luxury) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {editingUser ? 'Editar Usuario' : 'Crear Usuario'}
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>Nombre</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formName}
+                onChangeText={setFormName}
+                placeholder="Ej. Juan Carlos"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              <Text style={styles.formLabel}>Apellido</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formLastName}
+                onChangeText={setFormLastName}
+                placeholder="Ej. Pérez"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              <Text style={styles.formLabel}>DNI</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formDni}
+                onChangeText={setFormDni}
+                placeholder="Ej. 70123456"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="numeric"
+                maxLength={8}
+              />
+
+              <Text style={styles.formLabel}>Email</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formEmail}
+                onChangeText={setFormEmail}
+                placeholder="Ej. juan@gmail.com"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Text style={styles.formLabel}>
+                {editingUser ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}
+              </Text>
+              <TextInput
+                style={styles.formInput}
+                value={formPassword}
+                onChangeText={setFormPassword}
+                placeholder={editingUser ? 'Dejar en blanco para no cambiar' : 'Min. 6 caracteres'}
+                placeholderTextColor={theme.colors.textMuted}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              <Text style={styles.formLabel}>Dirección de Envío</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formAddress}
+                onChangeText={setFormAddress}
+                placeholder="Ej. Av. Larco 456, Dpto 402"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              <Text style={styles.formLabel}>Distrito</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formDistrict}
+                onChangeText={setFormDistrict}
+                placeholder="Ej. Miraflores"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              <Text style={styles.formLabel}>Rol / Categoría</Text>
+              <View style={[styles.roleSelectorRow, editingUser?.id === userProfile?.id && { opacity: 0.5 }]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={editingUser?.id === userProfile?.id}
+                  onPress={() => setFormRole('CLIENTE')}
+                  style={[styles.roleOptionChip, formRole === 'CLIENTE' && styles.roleOptionActive]}
+                >
+                  <Text style={[styles.roleOptionText, formRole === 'CLIENTE' && styles.roleOptionTextActive]}>
+                    CLIENTE
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={editingUser?.id === userProfile?.id}
+                  onPress={() => setFormRole('MOTORIZADO')}
+                  style={[styles.roleOptionChip, formRole === 'MOTORIZADO' && styles.roleOptionActive]}
+                >
+                  <Text style={[styles.roleOptionText, formRole === 'MOTORIZADO' && styles.roleOptionTextActive]}>
+                    MOTORIZADO
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={editingUser?.id === userProfile?.id}
+                  onPress={() => setFormRole('ADMIN')}
+                  style={[styles.roleOptionChip, formRole === 'ADMIN' && styles.roleOptionActive]}
+                >
+                  <Text style={[styles.roleOptionText, formRole === 'ADMIN' && styles.roleOptionTextActive]}>
+                    ADMIN
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {editingUser?.id === userProfile?.id && (
+                <Text style={{ fontSize: 9, color: theme.colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>
+                  * No puedes modificar tu propio rol de administrador.
+                </Text>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                disabled={submitting}
+                onPress={() => setModalVisible(false)}
+                style={styles.modalCancelButton}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                disabled={submitting}
+                onPress={handleSaveUser}
+                style={styles.modalSaveButton}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Guardar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -491,5 +721,155 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: theme.typography.lineHeights.bodyMedium,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxHeight: '85%',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.primary,
+    borderWidth: 1,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    ...theme.shadows.soft,
+  },
+  modalTitle: {
+    fontFamily: theme.typography.fontFamily.title,
+    fontSize: theme.typography.sizes.h2,
+    color: theme.colors.textPrimary,
+    fontWeight: theme.typography.weights.semibold,
+    marginBottom: theme.spacing.md,
+    textAlign: 'center',
+  },
+  formLabel: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: theme.spacing.md,
+    marginBottom: 4,
+  },
+  formInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surfaceElevated,
+    color: theme.colors.textPrimary,
+    paddingHorizontal: theme.spacing.md,
+    fontSize: theme.typography.sizes.bodyMedium,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  roleSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 8,
+  },
+  roleOptionChip: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  roleOptionActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryTransparent,
+  },
+  roleOptionText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    fontWeight: theme.typography.weights.bold,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  roleOptionTextActive: {
+    color: theme.colors.primary,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  modalCancelButton: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(235, 87, 87, 0.4)',
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: '#EB5757',
+    fontWeight: theme.typography.weights.bold,
+  },
+  modalSaveButton: {
+    flex: 1,
+    height: 44,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: '#000000',
+    fontWeight: theme.typography.weights.bold,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    marginRight: theme.spacing.md,
+  },
+  editButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.5,
+  },
+  headerCreateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.sm,
+    marginRight: theme.spacing.md,
+  },
+  headerCreateButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: '#000000',
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.5,
+  },
+  currentUserLabel: {
+    color: theme.colors.primary,
+    fontSize: 11,
+    fontWeight: theme.typography.weights.bold,
+    fontStyle: 'italic',
   },
 });

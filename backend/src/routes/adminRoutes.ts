@@ -7,7 +7,9 @@ import {
   getMotorizadosList, 
   updateMotorizadoStatus, 
   updateProductVariantStock,
-  createProduct 
+  createProduct,
+  createAdminUser,
+  updateAdminUser
 } from '../controllers/adminController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { adminMiddleware } from '../middleware/adminMiddleware';
@@ -23,8 +25,11 @@ router.get('/stats', getDashboardStats);
 
 // B. Rutas para Gestión de Usuarios
 router.get('/users', getUsers);
+router.post('/users', createAdminUser);
+router.put('/users/:id', updateAdminUser);
 router.put('/users/:id/role', updateUserRole);
 router.delete('/users/:id', deleteUser);
+
 
 // C. Rutas para Gestión de Motorizados
 router.get('/motorizados', getMotorizadosList);
