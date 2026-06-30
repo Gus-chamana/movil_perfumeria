@@ -699,4 +699,180 @@ export const updateMotorizadoDetails = async (req: AuthRequest, res: Response) =
   }
 };
 
+// 12. Modificar datos de un Producto y sus variantes
+export const updateProduct = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, brand, description, category, gender, imageUrl, variants } = req.body;
+
+    if (!name || !brand || !description || !category || !gender || !variants || !Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios para actualizar el producto.' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // A. Actualizar cabecera del producto
+      await tx.productos.update({
+        where: { id },
+        data: {
+          nombre: name.trim(),
+          marca: brand.trim(),
+          descripcion: description.trim(),
+          categoria: category.trim(),
+          gender: gender,
+          updated_at: new Date()
+        }
+      });
+
+      // B. Obtener todas las variantes existentes en la base de datos para este producto
+      const dbVariants = await tx.producto_variantes.findMany({
+        where: { producto_id: id }
+      });
+
+      const updatedVariantIds = variants.filter(v => v.id).map(v => v.id);
+
+      // C. Identificar variantes a eliminar (las que están en DB pero no en la petición)
+      const variantsToDelete = dbVariants.filter(dv => !updatedVariantIds.includes(dv.id));
+
+      for (const dv of variantsToDelete) {
+        try {
+          // Intentar borrar las vinculaciones de atributos
+          await tx.variante_atributos.deleteMany({
+            where: { producto_variante_id: dv.id }
+          });
+          // Intentar borrar los items de carritos
+          await tx.carrito_items.deleteMany({
+            where: { producto_variante_id: dv.id }
+          });
+          // Intentar borrar la variante
+          await tx.producto_variantes.delete({
+            where: { id: dv.id }
+          });
+        } catch (delErr) {
+          console.warn(`[No se pudo borrar variante ${dv.id}]:`, delErr);
+          throw new Error(`La variante con SKU ${dv.sku} no se puede eliminar porque está asociada a órdenes históricas. Sugerencia: Establece su stock en 0.`);
+        }
+      }
+
+      // D. Buscar o asegurar los atributos principales una sola vez al inicio para optimizar la latencia
+      let attrTamanio = await tx.atributos.findFirst({
+        where: { nombre: { equals: 'Tamaño', mode: 'insensitive' } }
+      });
+      if (!attrTamanio) {
+        attrTamanio = await tx.atributos.create({
+          data: { id: crypto.randomUUID(), nombre: 'Tamaño' }
+        });
+      }
+
+      let attrConcentracion = await tx.atributos.findFirst({
+        where: { nombre: { equals: 'Concentración', mode: 'insensitive' } }
+      });
+      if (!attrConcentracion) {
+        attrConcentracion = await tx.atributos.create({
+          data: { id: crypto.randomUUID(), nombre: 'Concentración' }
+        });
+      }
+
+      // E. Crear o actualizar variantes
+      for (const v of variants) {
+        let variantId = v.id;
+        const skuGenerado = v.sku?.trim() || `${brand.substring(0,2).toUpperCase()}-${name.substring(0,3).toUpperCase()}-${(v.size || 'UNI').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+
+        if (variantId) {
+          // Actualizar variante existente
+          await tx.producto_variantes.update({
+            where: { id: variantId },
+            data: {
+              sku: skuGenerado,
+              precio: Number(v.price),
+              stock: Number(v.stock),
+              imagen_url: imageUrl?.trim() || v.imageUrl?.trim() || null,
+              updated_at: new Date()
+            }
+          });
+
+          // Limpiar vinculaciones anteriores de atributos
+          await tx.variante_atributos.deleteMany({
+            where: { producto_variante_id: variantId }
+          });
+        } else {
+          // Crear nueva variante
+          variantId = crypto.randomUUID();
+          await tx.producto_variantes.create({
+            data: {
+              id: variantId,
+              producto_id: id,
+              sku: skuGenerado,
+              precio: Number(v.price),
+              stock: Number(v.stock),
+              imagen_url: imageUrl?.trim() || v.imageUrl?.trim() || null,
+              updated_at: new Date()
+            }
+          });
+        }
+
+        // Vincular atributos (Tamaño y Concentración)
+        if (v.size) {
+          let valTamanio = await tx.atributo_valores.findFirst({
+            where: {
+              atributo_id: attrTamanio.id,
+              valor: { equals: v.size.trim(), mode: 'insensitive' }
+            }
+          });
+          if (!valTamanio) {
+            valTamanio = await tx.atributo_valores.create({
+              data: {
+                id: crypto.randomUUID(),
+                atributo_id: attrTamanio.id,
+                valor: v.size.trim()
+              }
+            });
+          }
+
+          await tx.variante_atributos.create({
+            data: {
+              producto_variante_id: variantId,
+              atributo_valor_id: valTamanio.id
+            }
+          });
+        }
+
+        if (v.concentration) {
+          let valConcentracion = await tx.atributo_valores.findFirst({
+            where: {
+              atributo_id: attrConcentracion.id,
+              valor: { equals: v.concentration.trim(), mode: 'insensitive' }
+            }
+          });
+          if (!valConcentracion) {
+            valConcentracion = await tx.atributo_valores.create({
+              data: {
+                id: crypto.randomUUID(),
+                atributo_id: attrConcentracion.id,
+                valor: v.concentration.trim()
+              }
+            });
+          }
+
+          await tx.variante_atributos.create({
+            data: {
+              producto_variante_id: variantId,
+              atributo_valor_id: valConcentracion.id
+            }
+          });
+        }
+      }
+    }, {
+      maxWait: 15000,
+      timeout: 30000
+    });
+
+
+    res.status(200).json({ message: 'El producto y sus variantes fueron actualizados con éxito absoluto.' });
+  } catch (error: any) {
+    console.error('[Error en updateProduct]:', error);
+    res.status(500).json({ error: error.message || 'Ocurrió un error al actualizar el producto.' });
+  }
+};
+
+
 

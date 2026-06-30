@@ -17,7 +17,7 @@ import {
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../services/AuthContext';
 import { apiClient } from '../../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Variant {
@@ -50,8 +50,11 @@ export default function AdminProductsScreen() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Estados para el Modal de Creación de Producto
+  // Estados para el Modal de Creación/Edición de Producto
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  
   const [newProductName, setNewProductName] = useState('');
   const [newProductBrand, setNewProductBrand] = useState('');
   const [newProductDescription, setNewProductDescription] = useState('');
@@ -61,6 +64,7 @@ export default function AdminProductsScreen() {
   
   // Estado para la lista temporal de variantes en el formulario
   interface LocalVariant {
+    id?: string;
     size: string;
     concentration: string;
     price: string;
@@ -79,7 +83,8 @@ export default function AdminProductsScreen() {
   // Estado de envío (guardado)
   const [saving, setSaving] = useState(false);
 
-  const handleCreateProduct = async () => {
+
+  const handleSaveProduct = async () => {
     // Validar datos básicos del producto
     if (!newProductName.trim()) {
       Alert.alert('Datos Incompletos', 'Por favor ingresa el nombre del perfume.');
@@ -99,7 +104,14 @@ export default function AdminProductsScreen() {
     }
 
     // Preparar lista final de variantes
-    let finalVariants: any[] = [...tempVariants];
+    let finalVariants: any[] = tempVariants.map(v => ({
+      id: v.id,
+      size: v.size.trim(),
+      concentration: v.concentration.trim(),
+      price: Number(v.price),
+      stock: Number(v.stock),
+      sku: v.sku.trim() || undefined
+    }));
 
     // Si la lista de variantes temporales está vacía, validar y usar la variante del formulario actual
     if (finalVariants.length === 0) {
@@ -122,12 +134,6 @@ export default function AdminProductsScreen() {
 
     try {
       setSaving(true);
-      console.log('📡 Registrando nuevo producto en Supabase...', {
-        name: newProductName,
-        brand: newProductBrand,
-        variants: finalVariants
-      });
-
       const body = {
         name: newProductName.trim(),
         brand: newProductBrand.trim(),
@@ -138,9 +144,15 @@ export default function AdminProductsScreen() {
         variants: finalVariants
       };
 
-      await apiClient.post('/admin/products', body, userToken || undefined);
-
-      Alert.alert('Éxito', '¡El perfume y sus variantes fueron creados con éxito absoluto!');
+      if (modalMode === 'edit' && editingProductId) {
+        console.log(`📡 Actualizando producto ${editingProductId} en Supabase...`);
+        await apiClient.put(`/admin/products/${editingProductId}`, body, userToken || undefined);
+        Alert.alert('Éxito', '¡El perfume y sus variantes fueron actualizados con éxito absoluto!');
+      } else {
+        console.log('📡 Registrando nuevo producto en Supabase...');
+        await apiClient.post('/admin/products', body, userToken || undefined);
+        Alert.alert('Éxito', '¡El perfume y sus variantes fueron creados con éxito absoluto!');
+      }
       
       // Cerrar modal y limpiar campos
       setCreateModalVisible(false);
@@ -149,11 +161,46 @@ export default function AdminProductsScreen() {
       // Recargar lista de productos
       fetchProducts();
     } catch (error: any) {
-      console.error('[Error al crear producto]:', error);
-      Alert.alert('Error al registrar', error.message || 'No se pudo crear el perfume.');
+      console.error('[Error al guardar producto]:', error);
+      Alert.alert('Error al registrar', error.message || 'No se pudo guardar el perfume.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleOpenCreateModal = () => {
+    setModalMode('create');
+    setEditingProductId(null);
+    resetForm();
+    setCreateModalVisible(true);
+  };
+
+  const handleOpenEditModal = (product: Product) => {
+    setModalMode('edit');
+    setEditingProductId(product.id);
+    setNewProductName(product.name);
+    setNewProductBrand(product.brand);
+    setNewProductDescription(product.description);
+    setNewProductCategory(product.category);
+    setNewProductGender(product.gender as 'men' | 'women' | 'unisex');
+    setNewProductImageUrl(product.imageUrl || '');
+    
+    setTempVariants(product.variants.map(v => ({
+      id: v.id,
+      size: v.size || '',
+      concentration: v.concentration || '',
+      price: String(v.price),
+      stock: String(v.stock),
+      sku: v.sku || ''
+    })));
+
+    setVarSize('100ml');
+    setVarConcentration('Eau de Parfum');
+    setVarPrice('');
+    setVarStock('10');
+    setVarSku('');
+
+    setCreateModalVisible(true);
   };
 
   const resetForm = () => {
@@ -170,6 +217,7 @@ export default function AdminProductsScreen() {
     setVarStock('10');
     setVarSku('');
   };
+
 
   const handleAddTempVariant = () => {
     if (!varPrice.trim() || isNaN(Number(varPrice)) || Number(varPrice) <= 0) {
@@ -254,9 +302,11 @@ export default function AdminProductsScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchProducts();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -279,11 +329,12 @@ export default function AdminProductsScreen() {
         </View>
         <TouchableOpacity 
           activeOpacity={0.7} 
-          onPress={() => setCreateModalVisible(true)}
+          onPress={handleOpenCreateModal}
           style={styles.createButton}
         >
           <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
         </TouchableOpacity>
+
       </View>
 
       {loading ? (
@@ -363,7 +414,19 @@ export default function AdminProductsScreen() {
                   </View>
                 );
               })}
+
+              <View style={styles.cardActions}>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => handleOpenEditModal(item)}
+                  style={styles.editButton}
+                >
+                  <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
+                  <Text style={styles.editButtonText}>Editar Perfume</Text>
+                </TouchableOpacity>
+              </View>
             </View>
+
           )}
         />
       ) : (
@@ -388,7 +451,10 @@ export default function AdminProductsScreen() {
           <View style={styles.modalContent}>
             {/* Header del Modal */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nuevo Perfume Premium</Text>
+              <Text style={styles.modalTitle}>
+                {modalMode === 'edit' ? 'Editar Perfume Premium' : 'Nuevo Perfume Premium'}
+              </Text>
+
               <TouchableOpacity 
                 activeOpacity={0.7} 
                 onPress={() => {
@@ -634,15 +700,18 @@ export default function AdminProductsScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 disabled={saving}
-                onPress={handleCreateProduct}
+                onPress={handleSaveProduct}
                 style={[styles.saveBtn, saving && styles.disabledBtn]}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#0D0D0D" />
                 ) : (
-                  <Text style={styles.saveBtnText}>Registrar Perfume</Text>
+                  <Text style={styles.saveBtnText}>
+                    {modalMode === 'edit' ? 'Guardar Cambios' : 'Registrar Perfume'}
+                  </Text>
                 )}
               </TouchableOpacity>
+
             </View>
           </View>
         </View>
@@ -1170,4 +1239,26 @@ const styles = StyleSheet.create({
     color: '#0D0D0D',
     fontWeight: theme.typography.weights.bold,
   },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopColor: theme.colors.border,
+    borderTopWidth: 1,
+    marginTop: theme.spacing.md,
+    paddingTop: 8,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+  },
+  editButtonText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 10,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weights.bold,
+    letterSpacing: 0.5,
+  },
 });
+

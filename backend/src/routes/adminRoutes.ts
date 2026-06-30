@@ -10,7 +10,8 @@ import {
   createProduct,
   createAdminUser,
   updateAdminUser,
-  updateMotorizadoDetails
+  updateMotorizadoDetails,
+  updateProduct
 } from '../controllers/adminController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { adminMiddleware } from '../middleware/adminMiddleware';
@@ -41,5 +42,7 @@ router.put('/motorizados/:id/status', updateMotorizadoStatus);
 // D. Rutas para Modificación e Inserción de Productos/Stock
 router.put('/products/variants/:id/stock', updateProductVariantStock);
 router.post('/products', createProduct);
+router.put('/products/:id', updateProduct);
+
 
 export default router;
